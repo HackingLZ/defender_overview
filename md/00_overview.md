@@ -3,6 +3,8 @@
 > Complete end-to-end walkthrough of the 13-stage scan pipeline inside `mpengine.dll`.
 > All data from reverse engineering mpengine.dll v1.1.24120.x (14.3 MB, PE32 x86).
 
+> **Note:** If it wasn't obvious, this knowledge base was created as an LLM-driven experiment — the documentation, slide decks, and structural analysis were generated with significant AI assistance. The content will be iterated on and improved over time as findings are validated and refined through hands-on reverse engineering.
+
 ---
 
 ## Architecture Summary
