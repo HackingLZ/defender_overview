@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Defender Scan Pipeline — Deep Dive into mpengine.dll</title>
+<meta name="description" content="Reverse engineering breakdown of the 13-stage scan pipeline inside Windows Defender's mpengine.dll">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060911;
+  --bg2:#0c1120;
+  --bg3:#131a2e;
+  --bg4:#1c2541;
+  --fg:#eef1fa;
+  --fg2:#b4bdd4;
+  --fg3:#7a849e;
+  --line:rgba(140,160,220,.15);
+  --glass:rgba(14,20,38,.55);
+  --glass-border:rgba(140,160,220,.12);
+  --cyan:#00e5ff;
+  --green:#39ff14;
+  --purple:#b388ff;
+  --orange:#ff9100;
+  --red:#ff5252;
+  --yellow:#ffd740;
+  --pink:#ff80ab;
+  --mono:'SF Mono','Fira Code','Cascadia Code','JetBrains Mono',Consolas,monospace;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,sans-serif;
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--sans);
+  color:var(--fg);
+  background:var(--bg);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* ---- animated grid background ---- */
+.bg-grid{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(140,160,220,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(140,160,220,.04) 1px,transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 80% 60% at 50% 30%,black 20%,transparent 70%);
+}
+.bg-glow{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(800px 500px at 20% 10%,rgba(0,229,255,.10),transparent 60%),
+    radial-gradient(600px 400px at 80% 80%,rgba(179,136,255,.08),transparent 60%),
+    radial-gradient(500px 300px at 50% 50%,rgba(57,255,20,.04),transparent 60%);
+}
+
+/* ---- floating orbs ---- */
+.orb{
+  position:fixed;border-radius:50%;pointer-events:none;z-index:0;
+  filter:blur(80px);opacity:.35;
+  animation:drift 20s ease-in-out infinite alternate;
+}
+.orb-1{width:400px;height:400px;background:var(--cyan);top:-100px;left:-100px;animation-delay:0s}
+.orb-2{width:350px;height:350px;background:var(--purple);bottom:-80px;right:-80px;animation-delay:-7s}
+.orb-3{width:250px;height:250px;background:var(--green);top:40%;right:10%;animation-delay:-14s;opacity:.2}
+@keyframes drift{
+  0%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(30px,-20px) scale(1.08)}
+  100%{transform:translate(-20px,30px) scale(.95)}
+}
+
+section{position:relative;z-index:1}
+
+/* ---- hero ---- */
+.hero{
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:40px 24px 80px;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 16px;border-radius:999px;
+  background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);
+  font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:28px;
+  animation:fadeUp .8s ease both;
+}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{
+  font-size:clamp(2.4rem,6vw,5rem);font-weight:800;
+  line-height:1.05;letter-spacing:-.03em;
+  max-width:900px;
+  animation:fadeUp .8s ease .1s both;
+}
+.hero h1 .accent{
+  background:linear-gradient(135deg,var(--cyan),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero .subtitle{
+  font-size:clamp(1rem,2vw,1.3rem);
+  color:var(--fg2);line-height:1.6;max-width:680px;
+  margin-top:20px;
+  animation:fadeUp .8s ease .2s both;
+}
+.hero .version-tag{
+  font-family:var(--mono);font-size:13px;color:var(--fg3);margin-top:12px;
+  animation:fadeUp .8s ease .25s both;
+}
+.hero-actions{
+  display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;justify-content:center;
+  animation:fadeUp .8s ease .3s both;
+}
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(24px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ---- buttons ---- */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:14px 28px;border-radius:12px;
+  font-weight:700;font-size:15px;
+  text-decoration:none;color:var(--fg);
+  transition:all .25s ease;cursor:pointer;border:none;
+}
+.btn-primary{
+  background:linear-gradient(135deg,rgba(0,229,255,.18),rgba(179,136,255,.18));
+  border:1px solid rgba(0,229,255,.35);
+  box-shadow:0 0 30px rgba(0,229,255,.12),inset 0 1px 0 rgba(255,255,255,.06);
+}
+.btn-primary:hover{
+  border-color:rgba(0,229,255,.6);
+  box-shadow:0 0 50px rgba(0,229,255,.2),inset 0 1px 0 rgba(255,255,255,.1);
+  transform:translateY(-2px);
+}
+.btn-ghost{
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  backdrop-filter:blur(12px);
+}
+.btn-ghost:hover{
+  border-color:rgba(140,160,220,.3);background:rgba(14,20,38,.75);
+  transform:translateY(-2px);
+}
+.btn svg{width:18px;height:18px;fill:currentColor}
+
+/* ---- stats ribbon ---- */
+.stats-ribbon{
+  display:flex;justify-content:center;gap:0;flex-wrap:wrap;
+  padding:0 24px 80px;
+  animation:fadeUp .8s ease .4s both;
+}
+.stat-pill{
+  display:flex;flex-direction:column;align-items:center;
+  padding:20px 32px;
+  border-right:1px solid var(--line);
+}
+.stat-pill:last-child{border-right:none}
+.stat-pill .val{
+  font-family:var(--mono);font-weight:800;
+  font-size:clamp(1.4rem,2.5vw,2rem);
+}
+.stat-pill .lbl{font-size:12px;color:var(--fg3);margin-top:4px;letter-spacing:.04em}
+.c-cyan{color:var(--cyan)}.c-green{color:var(--green)}.c-purple{color:var(--purple)}.c-orange{color:var(--orange)}
+
+/* ---- pipeline section ---- */
+.section-header{text-align:center;padding:60px 24px 40px}
+.section-header .kicker{
+  font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--fg3);font-weight:600;
+}
+.section-header h2{
+  font-size:clamp(1.8rem,3.5vw,2.8rem);font-weight:800;margin-top:10px;
+}
+
+/* ---- pipeline visualization ---- */
+.pipeline-section{padding:0 24px 80px}
+.pipeline-wrap{
+  max-width:1200px;margin:0 auto;
+  display:grid;grid-template-columns:1fr;gap:2px;
+}
+.pipe-stage{
+  display:grid;grid-template-columns:60px 1fr;gap:0;
+  opacity:0;transform:translateX(-20px);
+  transition:opacity .5s ease,transform .5s ease;
+}
+.pipe-stage.visible{opacity:1;transform:translateX(0)}
+.pipe-num{
+  display:flex;flex-direction:column;align-items:center;
+  padding-top:20px;position:relative;
+}
+.pipe-num .circle{
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:12px;font-weight:800;
+  border:2px solid var(--line);background:var(--bg2);
+  position:relative;z-index:2;
+  transition:border-color .3s,box-shadow .3s;
+}
+.pipe-stage:hover .pipe-num .circle{
+  border-color:var(--cyan);
+  box-shadow:0 0 16px rgba(0,229,255,.3);
+}
+.pipe-num .line-seg{
+  flex:1;width:2px;background:var(--line);
+  margin-top:2px;
+}
+.pipe-stage:last-child .pipe-num .line-seg{display:none}
+.pipe-card{
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  border-radius:14px;padding:20px 24px;
+  margin:4px 0 4px 12px;
+  backdrop-filter:blur(12px);
+  transition:border-color .3s,box-shadow .3s,transform .3s;
+  text-decoration:none;color:inherit;display:block;
+}
+.pipe-card:hover{
+  border-color:rgba(0,229,255,.25);
+  box-shadow:0 8px 32px rgba(0,0,0,.3),0 0 20px rgba(0,229,255,.06);
+  transform:translateX(4px);
+}
+.pipe-card .stage-name{
+  font-weight:700;font-size:clamp(.95rem,1.4vw,1.15rem);
+  display:flex;align-items:center;gap:10px;
+}
+.pipe-card .stage-name .tag{
+  font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:6px;
+  background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.2);
+  color:var(--cyan);letter-spacing:.05em;
+}
+.pipe-card .stage-desc{
+  font-size:clamp(.8rem,1.1vw,.95rem);
+  color:var(--fg2);line-height:1.6;margin-top:8px;
+}
+.pipe-card .stage-meta{
+  display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;
+}
+.pipe-card .stage-meta span{
+  font-family:var(--mono);font-size:11px;color:var(--fg3);
+}
+
+/* color accents per stage type */
+.pipe-stage[data-color="cyan"] .circle{border-color:rgba(0,229,255,.4);color:var(--cyan)}
+.pipe-stage[data-color="green"] .circle{border-color:rgba(57,255,20,.4);color:var(--green)}
+.pipe-stage[data-color="purple"] .circle{border-color:rgba(179,136,255,.4);color:var(--purple)}
+.pipe-stage[data-color="orange"] .circle{border-color:rgba(255,145,0,.4);color:var(--orange)}
+.pipe-stage[data-color="yellow"] .circle{border-color:rgba(255,215,64,.4);color:var(--yellow)}
+.pipe-stage[data-color="red"] .circle{border-color:rgba(255,82,82,.4);color:var(--red)}
+
+/* ---- deck grid section ---- */
+.decks-section{padding:0 24px 100px}
+.decks-grid{
+  max-width:1200px;margin:0 auto;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;
+}
+.deck-card{
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  border-radius:14px;padding:20px;
+  backdrop-filter:blur(12px);
+  text-decoration:none;color:inherit;
+  transition:all .25s ease;
+  display:flex;flex-direction:column;gap:8px;
+}
+.deck-card:hover{
+  border-color:rgba(0,229,255,.3);
+  box-shadow:0 8px 32px rgba(0,0,0,.25),0 0 16px rgba(0,229,255,.06);
+  transform:translateY(-3px);
+}
+.deck-card .deck-idx{
+  font-family:var(--mono);font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--fg3);
+}
+.deck-card .deck-title{font-weight:700;font-size:1.05rem;line-height:1.3}
+.deck-card .deck-hint{font-size:12px;color:var(--fg3)}
+
+/* ---- footer ---- */
+.site-footer{
+  text-align:center;padding:40px 24px 60px;
+  border-top:1px solid var(--line);
+  font-size:13px;color:var(--fg3);
+}
+.site-footer a{color:var(--fg2);text-decoration:none}
+.site-footer a:hover{color:var(--cyan)}
+
+/* ---- responsive ---- */
+@media(max-width:768px){
+  .stat-pill{padding:14px 18px}
+  .pipe-stage{grid-template-columns:44px 1fr}
+  .pipe-num .circle{width:30px;height:30px;font-size:11px}
+  .pipe-card{padding:14px 16px;margin-left:8px}
+}
+@media(max-width:480px){
+  .hero{padding:24px 16px 60px}
+  .stats-ribbon{flex-direction:column;align-items:center}
+  .stat-pill{border-right:none;border-bottom:1px solid var(--line);width:100%;padding:14px 0}
+  .stat-pill:last-child{border-bottom:none}
+}
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+
+<!-- ========== HERO ========== -->
+<section class="hero">
+  <div class="hero-badge"><span class="dot"></span> Reverse Engineering Deep Dive</div>
+  <h1>The <span class="accent">13-Stage Scan Pipeline</span> Inside Defender</h1>
+  <p class="subtitle">
+    A complete reverse engineering breakdown of <strong>mpengine.dll</strong> &mdash;
+    the monolithic engine behind Windows Defender. Every file scanned on a Windows machine
+    flows through this single 14.3 MB binary.
+  </p>
+  <p class="version-tag">mpengine.dll v1.1.24120.x &middot; PE32 x86 &middot; 90 exports</p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="master_slide.html">
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      Launch Presentation
+    </a>
+    <a class="btn btn-ghost" href="#pipeline">
+      <svg viewBox="0 0 24 24"><path d="M12 4v16m-8-8h16" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+      Explore Pipeline
+    </a>
+    <a class="btn btn-ghost" href="https://github.com/HackingLZ/defender_overview" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 00-3.8 23.38c.6.11.82-.26.82-.58v-2.15c-3.34.73-4.04-1.61-4.04-1.61a3.18 3.18 0 00-1.33-1.76c-1.09-.74.08-.73.08-.73a2.52 2.52 0 011.84 1.24 2.56 2.56 0 003.5 1 2.56 2.56 0 01.76-1.61c-2.67-.3-5.47-1.34-5.47-5.93a4.64 4.64 0 011.24-3.22 4.3 4.3 0 01.12-3.18s1-.33 3.3 1.23a11.38 11.38 0 016 0c2.3-1.56 3.3-1.23 3.3-1.23a4.3 4.3 0 01.12 3.18 4.64 4.64 0 011.24 3.22c0 4.61-2.81 5.63-5.48 5.93a2.86 2.86 0 01.82 2.22v3.29c0 .32.22.7.82.58A12 12 0 0012 .3"/></svg>
+      GitHub
+    </a>
+  </div>
+</section>
+
+<!-- ========== STATS ========== -->
+<div class="stats-ribbon">
+  <div class="stat-pill"><span class="val c-cyan" data-count="13">0</span><span class="lbl">Pipeline Stages</span></div>
+  <div class="stat-pill"><span class="val c-green" data-count="358756">0</span><span class="lbl">Threat Definitions</span></div>
+  <div class="stat-pill"><span class="val c-purple" data-count="59415">0</span><span class="lbl">Lua Detection Scripts</span></div>
+  <div class="stat-pill"><span class="val c-orange" data-count="198">0</span><span class="lbl">Emulated Win APIs</span></div>
+</div>
+
+<!-- ========== PIPELINE ========== -->
+<section id="pipeline">
+  <div class="section-header">
+    <span class="kicker">Architecture</span>
+    <h2>The Complete Scan Pipeline</h2>
+  </div>
+  <div class="pipeline-section">
+    <div class="pipeline-wrap" id="pipeline-stages"></div>
+  </div>
+</section>
+
+<!-- ========== DECK GRID ========== -->
+<section>
+  <div class="section-header">
+    <span class="kicker">Presentation Decks</span>
+    <h2>Deep Dive Into Each Stage</h2>
+  </div>
+  <div class="decks-section">
+    <div class="decks-grid" id="deck-grid"></div>
+  </div>
+</section>
+
+<!-- ========== FOOTER ========== -->
+<footer class="site-footer">
+  <p>Educational &amp; research purposes only. All findings should be independently validated.</p>
+  <p style="margin-top:8px">
+    <a href="https://github.com/HackingLZ/defender_overview" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
+    &nbsp;&middot;&nbsp;
+    <a href="master_slide.html">Slide Navigator</a>
+  </p>
+</footer>
+
+<script>
+(function(){
+  var stages = [
+    {n:"01",file:"01_entry_point_slides.html",name:"Entry Point",color:"cyan",tag:"DISPATCH",desc:"How __rsignal and rsignal receive scan commands, dispatch by command code, and initialize the ScanContext.",meta:["90 exports","0x10133CD0"]},
+    {n:"02",file:"02_friendly_file_slides.html",name:"Friendly File",color:"green",tag:"WHITELIST",desc:"SHA-256/SHA-512 trusted-file lookup. Matching files are returned clean immediately, short-circuiting the pipeline.",meta:["SHA-256","SHA-512"]},
+    {n:"03",file:"03_static_engine_cascade_slides.html",name:"Static Engine Cascade",color:"cyan",tag:"11 ENGINES",desc:"11 signature engines fire in fixed order over raw bytes: STATIC, PEHSTR, PEHSTR_EXT, MACRO, KCRCE, BRUTE, NID, DBVAR, VDLL_SIG, ARHSTR, MSILFLAG.",meta:["117K PEHSTR rules","691K KCRCE"]},
+    {n:"04",file:"04_aaggregator_collection_slides.html",name:"Attribute Collection",color:"orange",tag:"AAGGREGATOR",desc:"Continuous collection of string-tag attributes into HashSet for downstream boolean evaluation at Stage 11.",meta:["HSTR:","SIGATTR:"]},
+    {n:"05",file:"05_pe_emulation_slides.html",name:"PE Emulation",color:"purple",tag:"CPU EMU",desc:"Full x86/x64/ARM CPU emulator: 198 WinAPI handlers, 973 virtual DLLs, FOP opcode tracing for dynamic unpacking.",meta:["198 APIs","973 VDLLs","4,601 FOP rules"]},
+    {n:"06",file:"06_unpacked_content_slides.html",name:"Unpacked Content",color:"green",tag:"RESCAN",desc:"Recursive rescan of PE sections and VFS-dropped files from the emulator back through the full pipeline.",meta:["Recursive","Stage 6 \u2192 Stage 2"]},
+    {n:"07",file:"07_container_extraction_slides.html",name:"Container Extraction",color:"cyan",tag:"70+ FORMATS",desc:"Recursive extraction from archives, Office docs, PDFs, installers via pluggable nUFS format handlers.",meta:["ZIP","OLE2","PDF","CAB"]},
+    {n:"08",file:"08_script_deobfuscation_slides.html",name:"Script Deobfuscation",color:"orange",tag:"NSCRIPT",desc:"Fixed-point deobfuscation for PowerShell, VBScript, JScript, and Batch. Iteratively simplifies until stable.",meta:["PS","VBS","JS","BAT"]},
+    {n:"09",file:"09_brute_matching_slides.html",name:"BRUTE Matching",color:"yellow",tag:"POLYMORPHIC",desc:"Format-agnostic content matching over raw, unpacked, and deobfuscated buffers. Catches what format-specific engines miss.",meta:["HSTR patterns"]},
+    {n:"10",file:"10_lua_scripts_slides.html",name:"Lua Scripts",color:"cyan",tag:"59K SCRIPTS",desc:"Lua 5.1 detection runtime with custom mp.* APIs. The most flexible detection layer in the engine.",meta:["59,415 scripts","mp.* API"]},
+    {n:"11",file:"11_aaggregator_evaluation_slides.html",name:"Attribute Evaluation",color:"purple",tag:"BOOLEAN EVAL",desc:"AAGGREGATOR combines all collected attributes via AND/OR/NOT logic trees to produce composite detections.",meta:["Boolean expressions"]},
+    {n:"12",file:"12_maps_cloud_lookup_slides.html",name:"MAPS Cloud Lookup",color:"cyan",tag:"CLOUD",desc:"Cloud escalation for low-confidence detections via Bond serialization. Includes FASTPATH quick-response and sample submission.",meta:["Bond","FASTPATH","*.wdcp.microsoft.com"]},
+    {n:"13",file:"13_verdict_resolution_slides.html",name:"Verdict Resolution",color:"green",tag:"FINAL",desc:"Merges all detections, deduplicates, applies severity ranking, filters infrastructure markers, returns highest-priority verdict.",meta:["Priority merge","Threat naming"]}
+  ];
+
+  var pipeWrap = document.getElementById("pipeline-stages");
+  stages.forEach(function(s, i){
+    var el = document.createElement("div");
+    el.className = "pipe-stage";
+    el.setAttribute("data-color", s.color);
+    var metaHtml = s.meta.map(function(m){return "<span>"+m+"</span>";}).join("");
+    el.innerHTML =
+      '<div class="pipe-num"><div class="circle">'+s.n+'</div><div class="line-seg"></div></div>'+
+      '<a class="pipe-card" href="slides/'+s.file+'#1">'+
+        '<div class="stage-name">'+s.name+' <span class="tag">'+s.tag+'</span></div>'+
+        '<div class="stage-desc">'+s.desc+'</div>'+
+        '<div class="stage-meta">'+metaHtml+'</div>'+
+      '</a>';
+    pipeWrap.appendChild(el);
+  });
+
+  var decks = [
+    {file:"slides/00_overview_slides.html",title:"00 \u2014 Master Overview"},
+    {file:"slides/01_entry_point_slides.html",title:"01 \u2014 Entry Point"},
+    {file:"slides/02_friendly_file_slides.html",title:"02 \u2014 Friendly File"},
+    {file:"slides/03_static_engine_cascade_slides.html",title:"03 \u2014 Static Engine Cascade"},
+    {file:"slides/04_aaggregator_collection_slides.html",title:"04 \u2014 AAGGREGATOR Collection"},
+    {file:"slides/05_pe_emulation_slides.html",title:"05 \u2014 PE Emulation"},
+    {file:"slides/06_unpacked_content_slides.html",title:"06 \u2014 Unpacked Content"},
+    {file:"slides/07_container_extraction_slides.html",title:"07 \u2014 Container Extraction"},
+    {file:"slides/08_script_deobfuscation_slides.html",title:"08 \u2014 Script Deobfuscation"},
+    {file:"slides/09_brute_matching_slides.html",title:"09 \u2014 BRUTE Matching"},
+    {file:"slides/10_lua_scripts_slides.html",title:"10 \u2014 Lua Scripts"},
+    {file:"slides/11_aaggregator_evaluation_slides.html",title:"11 \u2014 AAGGREGATOR Evaluation"},
+    {file:"slides/12_maps_cloud_lookup_slides.html",title:"12 \u2014 MAPS Cloud Lookup"},
+    {file:"slides/13_verdict_resolution_slides.html",title:"13 \u2014 Verdict Resolution"}
+  ];
+
+  var grid = document.getElementById("deck-grid");
+  decks.forEach(function(d, i){
+    var card = document.createElement("a");
+    card.className = "deck-card";
+    card.href = d.file + "#1";
+    card.innerHTML =
+      '<span class="deck-idx">Deck '+String(i+1).padStart(2,"0")+' of '+decks.length+'</span>'+
+      '<span class="deck-title">'+d.title+'</span>'+
+      '<span class="deck-hint">Open at slide 1 \u2192</span>';
+    grid.appendChild(card);
+  });
+
+  // counter animation
+  function animateCounters(){
+    document.querySelectorAll("[data-count]").forEach(function(el){
+      var target = parseInt(el.getAttribute("data-count"),10);
+      if(isNaN(target))return;
+      var start = performance.now();
+      function tick(now){
+        var t = Math.min((now - start) / 1400, 1);
+        var eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = Math.round(target * eased).toLocaleString();
+        if(t < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    });
+  }
+
+  // intersection observer for pipeline stages
+  var obs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        e.target.classList.add("visible");
+      }
+    });
+  },{threshold:0.15,rootMargin:"0px 0px -40px 0px"});
+
+  document.querySelectorAll(".pipe-stage").forEach(function(el, i){
+    el.style.transitionDelay = (i * 0.06) + "s";
+    obs.observe(el);
+  });
+
+  // fire counters when stats come into view
+  var statsObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        animateCounters();
+        statsObs.disconnect();
+      }
+    });
+  },{threshold:0.5});
+  var ribbon = document.querySelector(".stats-ribbon");
+  if(ribbon) statsObs.observe(ribbon);
+})();
+</script>
+</body>
+</html>

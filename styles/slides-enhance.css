@@ -1,0 +1,39 @@
+/* shared enhancements for all slide decks */
+
+body::before{
+  content:'';position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(140,160,220,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(140,160,220,.03) 1px,transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 70% 50% at 50% 30%,black 20%,transparent 70%);
+  -webkit-mask-image:radial-gradient(ellipse 70% 50% at 50% 30%,black 20%,transparent 70%);
+}
+
+body::after{
+  content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(600px 400px at 10% 10%,rgba(0,229,255,.06),transparent 60%),
+    radial-gradient(500px 350px at 90% 90%,rgba(179,136,255,.05),transparent 60%);
+}
+
+#progress{height:3px!important;border-radius:0 2px 2px 0}
+
+.stat-card{
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+
+.code-block{
+  box-shadow:0 4px 20px rgba(0,0,0,.3);
+}
+
+.slide.active .stat-card,
+.slide.active .engine-bar,
+.slide.active .flow-node{
+  animation:slideEnter .5s ease both;
+}
+@keyframes slideEnter{
+  from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:translateY(0)}
+}
