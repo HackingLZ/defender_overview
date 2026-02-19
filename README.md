@@ -4,6 +4,8 @@ A reverse engineering breakdown of the 13-stage scan pipeline inside **mpengine.
 
 Each stage is documented with reconstructed data structures, pseudocode, address-level references, RTTI class hierarchies, and string table extractions from the binary itself.
 
+**Note:** If it wasn't obvious, this knowledge base was created as an LLM-driven experiment — the documentation, slide decks, and structural analysis were generated with significant AI assistance. The content will be iterated on and improved over time as findings are validated and refined through hands-on reverse engineering.
+
 ## Disclaimer
 
 This material is provided for educational and research purposes only.
