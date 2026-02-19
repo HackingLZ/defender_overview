@@ -280,8 +280,8 @@ Components:
 
 | Suffix | Meaning |
 |--------|---------|
-| `!MTB` | Machine Learning / Tree-Based model |
-| `!ml` | Machine Learning detection |
+| `!MTB` | Machine Learning / Tree-Based model — produced by SigTree decision tree ensemble. See [SigTree ML (SS14)](14_sigtree_ml_classification.md) |
+| `!ml` | Machine Learning detection — produced by SigTree classification. See [SS14](14_sigtree_ml_classification.md) |
 | `!dha` | Dynamic Heuristic Analysis |
 | `!pz` | Pattern-based heuristic |
 | `!rfn` | Real-time File Notification |

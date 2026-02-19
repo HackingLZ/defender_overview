@@ -622,7 +622,7 @@ BRUTE-deposited attributes participate in AAGG boolean expressions:
 BRUTE complements the static engines by providing:
 - Raw-data matching that static engines skip
 - Post-transformation matching
-- Feature extraction for ML classification
+- Feature extraction for ML classification (BRUTE:*:Feature:* attributes feed into SigTree decision trees — see [SigTree ML (SS14)](14_sigtree_ml_classification.md))
 
 ---
 

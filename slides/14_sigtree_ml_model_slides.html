@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SigTree — On-Device ML Classification</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a2e;--bg4:#22223a;
+  --fg:#e0e0e8;--fg2:#a0a0b8;--fg3:#707088;
+  --cyan:#00e5ff;--green:#39ff14;--purple:#b388ff;--orange:#ff9100;
+  --red:#ff5252;--yellow:#ffd740;--pink:#ff80ab;
+  --mono:'SF Mono','Fira Code','Cascadia Code','JetBrains Mono',Consolas,monospace;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,sans-serif;
+  --slide-transition:0.5s cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-family:var(--sans)}
+body{display:flex;flex-direction:column}
+#progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--pink),var(--purple));z-index:100;transition:width 0.4s ease}
+#slide-counter{position:fixed;bottom:18px;right:24px;font-family:var(--mono);font-size:13px;color:var(--fg3);z-index:100;user-select:none}
+#deck{flex:1;position:relative;overflow:hidden}
+.slide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:60px 80px;opacity:0;transform:translateX(60px);transition:opacity var(--slide-transition),transform var(--slide-transition);pointer-events:none}
+.slide.active{opacity:1;transform:translateX(0);pointer-events:auto}
+.slide.prev{opacity:0;transform:translateX(-60px)}
+.slide-inner{width:100%;max-width:1600px;height:100%;display:flex;flex-direction:column;justify-content:center}
+h1{font-size:clamp(2rem,4.5vw,4rem);font-weight:800;line-height:1.1;letter-spacing:-0.02em}
+h2{font-size:clamp(1.5rem,3vw,2.8rem);font-weight:700;line-height:1.2;letter-spacing:-0.01em;margin-bottom:0.6em}
+h3{font-size:clamp(1rem,1.8vw,1.5rem);font-weight:600;margin-bottom:0.4em}
+p,.desc{font-size:clamp(0.85rem,1.3vw,1.15rem);line-height:1.6;color:var(--fg2)}
+code,.code{font-family:var(--mono);font-size:0.9em}
+.mono{font-family:var(--mono)}
+.glow-cyan{color:var(--cyan);text-shadow:0 0 30px rgba(0,229,255,0.4),0 0 60px rgba(0,229,255,0.15)}
+.glow-green{color:var(--green);text-shadow:0 0 30px rgba(57,255,20,0.4)}
+.glow-purple{color:var(--purple);text-shadow:0 0 30px rgba(179,136,255,0.4)}
+.glow-orange{color:var(--orange);text-shadow:0 0 30px rgba(255,145,0,0.4)}
+.glow-red{color:var(--red);text-shadow:0 0 30px rgba(255,82,82,0.4)}
+.glow-yellow{color:var(--yellow);text-shadow:0 0 30px rgba(255,215,64,0.4)}
+.glow-pink{color:var(--pink);text-shadow:0 0 30px rgba(255,128,171,0.4)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;width:100%}
+.split-60-40{display:grid;grid-template-columns:3fr 2fr;gap:40px;align-items:start;width:100%}
+.center-col{display:flex;flex-direction:column;align-items:center;text-align:center}
+.mt-1{margin-top:0.5em}.mt-2{margin-top:1em}.mt-3{margin-top:1.5em}.mb-1{margin-bottom:0.5em}.mb-2{margin-bottom:1em}
+.stat-grid{display:grid;gap:14px}
+.stat-grid-4{grid-template-columns:repeat(4,1fr)}
+.stat-grid-3{grid-template-columns:repeat(3,1fr)}
+.stat-grid-2x3{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr)}
+.stat-card{background:var(--bg3);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:18px 16px;text-align:center;opacity:0;transform:translateY(20px);transition:opacity 0.5s ease,transform 0.5s ease}
+.slide.active .stat-card{opacity:1;transform:translateY(0)}
+.stat-card .num{font-size:clamp(1.2rem,2.2vw,2rem);font-weight:800;font-family:var(--mono);display:block}
+.stat-card .label{font-size:clamp(0.65rem,0.9vw,0.85rem);color:var(--fg3);margin-top:4px;display:block}
+.engine-bar{display:flex;align-items:center;gap:12px;background:var(--bg3);border-radius:8px;padding:10px 16px;border-left:4px solid var(--green);opacity:0;transform:translateX(-30px);transition:opacity 0.4s ease,transform 0.4s ease}
+.slide.active .engine-bar{opacity:1;transform:translateX(0)}
+.engine-bar .idx{font-family:var(--mono);font-size:0.75rem;color:var(--fg3);min-width:20px}
+.engine-bar .name{font-weight:700;font-size:clamp(0.75rem,1.1vw,1rem);min-width:130px}
+.engine-bar .detail{font-size:clamp(0.65rem,0.85vw,0.85rem);color:var(--fg2)}
+.code-block{background:#0d0d18;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px 20px;font-family:var(--mono);font-size:clamp(0.7rem,0.95vw,0.9rem);line-height:1.7;overflow-x:auto;color:var(--fg2);white-space:pre}
+.code-block .kw{color:var(--purple)}.code-block .fn{color:var(--cyan)}.code-block .str{color:var(--green)}.code-block .num{color:var(--orange)}.code-block .cmt{color:var(--fg3);font-style:italic}
+.flow-node{padding:8px 14px;border-radius:8px;font-size:clamp(0.6rem,0.75vw,0.75rem);font-weight:600;text-align:center;white-space:nowrap;opacity:0;transform:translateY(10px);transition:opacity 0.4s ease,transform 0.4s ease}
+.slide.active .flow-node{opacity:1;transform:translateY(0)}
+.flow-arrow{font-size:1.2em;color:var(--fg3);padding:0 4px;opacity:0;transition:opacity 0.4s ease}
+.slide.active .flow-arrow{opacity:1}
+.pipeline-track{position:relative;background:var(--bg3);border-radius:12px;padding:20px;overflow:hidden}
+.pipeline-dot{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--pink);box-shadow:0 0 12px var(--pink);top:50%;transform:translate(-50%,-50%);left:-20px;transition:left 3s linear}
+.slide.active .pipeline-dot{left:calc(100% + 20px)}
+@media(max-width:1200px){.slide{padding:40px}.split,.split-60-40{grid-template-columns:1fr;gap:24px}.stat-grid-4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.slide{padding:24px}.stat-grid-3{grid-template-columns:repeat(2,1fr)}}
+</style>
+<link rel="stylesheet" href="../styles/slides-enhance.css">
+</head>
+<body>
+<div id="progress" style="width:0%"></div>
+<div id="slide-counter"></div>
+<div id="deck">
+
+<!-- SLIDE 1: Title -->
+<div class="slide active" data-slide="1">
+<div class="slide-inner center-col" style="justify-content:center;gap:24px">
+  <p class="mono" style="font-size:clamp(0.7rem,1vw,0.95rem);color:var(--fg3);letter-spacing:0.15em;text-transform:uppercase">Cross-Cutting &mdash; On-Device Machine Learning</p>
+  <h1 class="glow-pink">SigTree ML Classification</h1>
+  <h2 style="font-weight:400;font-size:clamp(1rem,2vw,1.6rem);color:var(--fg2)">Decision Tree Ensemble &mdash; 33,428 Trees JIT-Compiled to Native x86</h2>
+  <div style="display:flex;gap:24px;margin-top:32px;flex-wrap:wrap;justify-content:center">
+    <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-pink" data-count="33428">0</span><span class="label">Decision Trees</span></div>
+    <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-cyan">3</span><span class="label">Signature Types</span></div>
+    <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-green">6</span><span class="label">Node Types</span></div>
+    <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-purple">JIT</span><span class="label">x86 Compilation</span></div>
+  </div>
+  <p class="mono mt-3" style="font-size:0.75rem;color:var(--fg3)">sigtree @ 0x109c80b0 &bull; jit_emitter @ 0x100f226f &bull; mpengine.dll</p>
+</div>
+</div>
+
+<!-- SLIDE 2: What SigTree Does -->
+<div class="slide" data-slide="2">
+<div class="slide-inner">
+  <h2 class="glow-pink mb-2">What SigTree Does</h2>
+  <div class="split">
+    <div>
+      <p class="desc">SIG_TREE is Windows Defender's <strong>on-device machine learning classification system</strong>. It implements a decision tree ensemble that evaluates boolean predicates over accumulated signature attributes (sigattr) to produce ML-based detections.</p>
+      <p class="desc mt-2">Unlike cloud-based ML (MAPS/SpyNet), SIG_TREE runs <strong>entirely locally</strong> using decision trees shipped in the VDM signature databases. This is a critical detection layer producing <code>!MTB</code> and <code>!ml</code> suffixed threat names.</p>
+      <p class="desc mt-2" style="color:var(--fg3)">SIG_TREE is NOT a separate pipeline stage. It runs as a <strong>supporting engine</strong> within the Static Engine Cascade (Stage 03) and during BM evaluation.</p>
+    </div>
+    <div>
+      <div style="display:grid;grid-template-columns:1fr;gap:10px">
+        <div class="stat-card" style="transition-delay:0.1s;text-align:left;padding:14px;border-left:3px solid var(--pink)">
+          <span class="label" style="color:var(--pink);font-weight:700">Detection Suffixes</span>
+          <span style="display:block;font-size:0.75rem;color:var(--fg2);margin-top:4px"><code>!MTB</code> &mdash; Machine Learning / Tree-Based</span>
+          <span style="display:block;font-size:0.75rem;color:var(--fg2);margin-top:2px"><code>!ml</code> &mdash; Machine Learning classification</span>
+        </div>
+        <div class="stat-card" style="transition-delay:0.15s;text-align:left;padding:14px;border-left:3px solid var(--cyan)">
+          <span class="label" style="color:var(--cyan);font-weight:700">Example Detections</span>
+          <span style="display:block;font-size:0.75rem;color:var(--fg2);margin-top:4px"><code>Trojan:Win32/Emotet.RPX!MTB</code></span>
+          <span style="display:block;font-size:0.75rem;color:var(--fg2);margin-top:2px"><code>Trojan:Win32/AgentTesla!ml</code></span>
+        </div>
+        <div class="stat-card" style="transition-delay:0.2s;text-align:left;padding:14px;border-left:3px solid var(--purple)">
+          <span class="label" style="color:var(--purple);font-weight:700">Key Insight</span>
+          <span style="display:block;font-size:0.75rem;color:var(--fg2);margin-top:4px">Trees evaluate over the sigattr log &mdash; a running record of boolean feature attributes set by all prior pipeline stages</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 3: Architecture / Data Flow -->
+<div class="slide" data-slide="3">
+<div class="slide-inner center-col">
+  <h2 class="glow-cyan mb-1">Architecture &amp; Data Flow</h2>
+  <p class="desc mb-2">From VDM signature database to ML detection verdict</p>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:700px">
+    <div class="flow-node" style="background:rgba(255,128,171,0.1);border:1px solid rgba(255,128,171,0.3);transition-delay:0.1s;padding:14px 28px;color:var(--pink);width:85%"><strong>1. VDM Parsing</strong> &mdash; Parse SIG_TREE TLV entries (0x40, 0x41, 0xB3)<br><span style="font-size:0.6rem;color:var(--fg3)">5-byte header + 16-byte nodes &rarr; expanded to 32 bytes in memory</span></div>
+    <span class="flow-arrow" style="transition-delay:0.15s;font-size:1.5em">&darr;</span>
+    <div class="flow-node" style="background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);transition-delay:0.2s;padding:14px 28px;color:var(--cyan);width:85%"><strong>2. Feature Accumulation</strong> &mdash; Pipeline stages deposit sigattr events<br><span style="font-size:0.6rem;color:var(--fg3)">Stage 3: PEHSTR/STATIC &bull; Stage 5: PE emu &bull; Stage 8: NScript JS &bull; Stage 9: BRUTE &bull; Stage 10: Lua</span></div>
+    <span class="flow-arrow" style="transition-delay:0.25s;font-size:1.5em">&darr;</span>
+    <div class="flow-node" style="background:rgba(179,136,255,0.1);border:1px solid rgba(179,136,255,0.3);transition-delay:0.3s;padding:14px 28px;color:var(--purple);width:85%"><strong>3. SigAttr Log</strong> &mdash; Circular head/tail log of boolean attributes<br><span style="font-size:0.6rem;color:var(--fg3)">sigattr_head @ 0x1097d710 &bull; sigattr_tail @ 0x1097d720 &bull; 32 bytes per entry</span></div>
+    <span class="flow-arrow" style="transition-delay:0.35s;font-size:1.5em">&darr;</span>
+    <div class="flow-node" style="background:rgba(255,145,0,0.1);border:1px solid rgba(255,145,0,0.3);transition-delay:0.4s;padding:14px 28px;color:var(--orange);width:85%"><strong>4. JIT Compile &amp; Evaluate</strong> &mdash; Tree nodes compiled to native x86 MOV instructions<br><span style="font-size:0.6rem;color:var(--fg3)">jit_emitter @ 0x100f226f &bull; JIT buffer at [esi+0x37d4] &bull; lfence for Spectre mitigation</span></div>
+    <span class="flow-arrow" style="transition-delay:0.45s;font-size:1.5em">&darr;</span>
+    <div class="flow-node" style="background:rgba(57,255,20,0.2);border:2px solid rgba(57,255,20,0.5);transition-delay:0.5s;padding:14px 28px;color:var(--green);width:85%;font-weight:700"><strong>5. Detection</strong> &mdash; !MTB / !ml threat name + metadata<br><span style="font-size:0.6rem;color:var(--fg2);font-weight:400">peattributes, imphash, clusterhash, sigattrevents, researchdata</span></div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 4: Three Signature Types -->
+<div class="slide" data-slide="4">
+<div class="slide-inner center-col">
+  <h2 class="glow-purple mb-2">Three Signature Types &mdash; 33,428 Trees</h2>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;width:100%;max-width:1200px">
+    <div style="background:var(--bg3);border:1px solid rgba(0,229,255,0.3);border-radius:12px;padding:24px;opacity:0;transform:translateY(20px);transition:all 0.5s ease 0.1s" class="stat-card">
+      <span class="num glow-cyan" style="font-size:2rem" data-count="14926">0</span>
+      <span class="label" style="color:var(--cyan);font-size:0.9rem;font-weight:700;margin-top:8px">SIG_TREE (0x40)</span>
+      <span class="label mono" style="margin-top:4px">@ 0x10986C88</span>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:10px;line-height:1.5">Standard decision trees. Fixed 16-byte nodes. Node type marker <code>0x30</code>. Evaluates PE and file attributes.</p>
+    </div>
+    <div style="background:var(--bg3);border:1px solid rgba(179,136,255,0.3);border-radius:12px;padding:24px;opacity:0;transform:translateY(20px);transition:all 0.5s ease 0.2s" class="stat-card">
+      <span class="num glow-purple" style="font-size:2rem" data-count="3771">0</span>
+      <span class="label" style="color:var(--purple);font-size:0.9rem;font-weight:700;margin-top:8px">SIG_TREE_EXT (0x41)</span>
+      <span class="label mono" style="margin-top:4px">@ 0x10987008</span>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:10px;line-height:1.5">Extended trees with <strong>embedded inline strings</strong> (file paths, URLs). Variable-length nodes with <code>0x90</code> wildcard escapes.</p>
+    </div>
+    <div style="background:var(--bg3);border:1px solid rgba(255,145,0,0.3);border-radius:12px;padding:24px;opacity:0;transform:translateY(20px);transition:all 0.5s ease 0.3s" class="stat-card">
+      <span class="num glow-orange" style="font-size:2rem" data-count="14731">0</span>
+      <span class="label" style="color:var(--orange);font-size:0.9rem;font-weight:700;margin-top:8px">SIG_TREE_BM (0xB3)</span>
+      <span class="label mono" style="margin-top:4px">@ 0x109871D4</span>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:10px;line-height:1.5">Behavioral monitoring trees. Node type marker <code>0x40</code>. UTF-16LE patterns for behavioral indicators.</p>
+    </div>
+  </div>
+  <div class="code-block mt-3" style="font-size:0.75rem;max-width:900px;margin:0 auto"><span class="cmt">// Confirmed from VDM dumps:</span>
+<span class="str">05 00 01 03 00</span> <span class="cmt">// 5 nodes, ver 1, type 3, flags 0 (SIG_TREE — Agent)</span>
+<span class="str">09 00 01 03 00</span> <span class="cmt">// 9 nodes, ver 1, type 3, flags 0 (SIG_TREE — Agent)</span>
+<span class="str">02 00 01 02 00</span> <span class="cmt">// 2 nodes, ver 1, type 2, flags 0 (SIG_TREE_BM — ModifiedAutoRunInf)</span></div>
+</div>
+</div>
+
+<!-- SLIDE 5: VDM Binary Format -->
+<div class="slide" data-slide="5">
+<div class="slide-inner">
+  <h2 class="glow-orange mb-1">VDM Binary Format</h2>
+  <p class="desc mb-2">5-byte TLV header + 16-byte fixed-length nodes, expanded to 32 bytes in memory</p>
+  <div class="split">
+    <div>
+      <h3 style="color:var(--orange)">TLV Entry Header (5 bytes)</h3>
+      <div class="code-block" style="font-size:0.72rem"><span class="fn">Offset  Size  Field</span>
+------  ----  -----
+<span class="num">0x00</span>    2     <span class="str">node_count</span> (uint16 LE)
+<span class="num">0x02</span>    1     <span class="str">version</span> (0x01=std, 0x02=ext)
+<span class="num">0x03</span>    1     <span class="str">tree_type</span> (0x03=SIG_TREE, 0x02=BM)
+<span class="num">0x04</span>    1     <span class="str">flags</span>
+
+<span class="cmt">// total_size = 5 + (node_count * 16)</span>
+<span class="cmt">// Example: 5 nodes = 5 + 80 = 85 bytes</span></div>
+      <h3 class="mt-2" style="color:var(--orange)">16-Byte Node (On-Disk)</h3>
+      <div class="code-block" style="font-size:0.72rem"><span class="fn">Offset  Size  Field</span>
+------  ----  -----
+<span class="num">0x00</span>    2     <span class="str">flags / child_info</span>
+<span class="num">0x02</span>    2     <span class="str">secondary data</span>
+<span class="num">0x04</span>    1     <span class="str">attribute_index</span> (sigattr ref)
+<span class="num">0x05</span>    1     <span class="str">node_type_marker</span> (0x30/0x40)
+<span class="num">0x06</span>    1     <span class="str">mode/subtype</span>
+<span class="num">0x07</span>    4     <span class="str">hash/CRC value</span>
+<span class="num">0x0B</span>    5     <span class="str">secondary / padding</span></div>
+    </div>
+    <div>
+      <h3 style="color:var(--orange)">In-Memory Expansion (32 bytes)</h3>
+      <div class="code-block" style="font-size:0.72rem"><span class="cmt">// At 0x1012b05d:</span>
+<span class="kw">sar</span> eax, <span class="num">5</span>  <span class="cmt">// divide by 32</span>
+
+<span class="cmt">// Tree data loader @ 0x1012b02a:</span>
+node_count = (end_ptr - start_ptr) >> <span class="num">5</span>
+
+<span class="cmt">// Expansion adds:</span>
+<span class="cmt">//  - Resolved child pointers</span>
+<span class="cmt">//  - Pre-computed eval state</span>
+<span class="cmt">//  - Alignment padding</span></div>
+      <h3 class="mt-2" style="color:var(--purple)">Variable-Length Nodes (EXT)</h3>
+      <p class="desc" style="font-size:0.78rem">SIG_TREE_EXT entries contain embedded inline strings with wildcard patterns:</p>
+      <div class="code-block mt-1" style="font-size:0.68rem"><span class="str">c:\windows\system32\*.dll</span>
+<span class="str">c:\windows\temp\*.exe</span>
+<span class="str">http://*.hotmail.ru/flashcard/*.iso</span>
+
+<span class="cmt">// 0x90 wildcard escape byte:</span>
+<span class="num">0x90 0x02 0x08</span> <span class="cmt">// 8-char min match</span>
+<span class="num">0x90 0x02 0x10</span> <span class="cmt">// 16-char min match</span>
+<span class="num">0x90 0x00</span>      <span class="cmt">// end-of-pattern</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 6: Tree Node Semantics -->
+<div class="slide" data-slide="6">
+<div class="slide-inner">
+  <h2 class="glow-green mb-1">Tree Node Semantics</h2>
+  <p class="desc mb-2">Binary decision tree with 6 node types &mdash; string table at 0x10987530</p>
+  <div class="split">
+    <div>
+      <h3 style="color:var(--green)">6 Node Types</h3>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.05s">
+          <span class="name" style="color:var(--green);min-width:100px">attribute</span>
+          <span class="detail"><code>0x10987530</code> &mdash; Leaf: checks a specific sigattr feature</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.1s">
+          <span class="name" style="color:var(--cyan);min-width:100px">matched</span>
+          <span class="detail"><code>0x1098753c</code> &mdash; Terminal: indicates a match result</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--purple);transition-delay:0.15s">
+          <span class="name" style="color:var(--purple);min-width:100px">p1</span>
+          <span class="detail"><code>0x1098754c</code> &mdash; Predicate 1: first boolean child (true)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--purple);transition-delay:0.2s">
+          <span class="name" style="color:var(--purple);min-width:100px">p2</span>
+          <span class="detail"><code>0x10987550</code> &mdash; Predicate 2: second boolean child (true)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--orange);transition-delay:0.25s">
+          <span class="name" style="color:var(--orange);min-width:100px">np1</span>
+          <span class="detail"><code>0x10987558</code> &mdash; Negated Predicate 1 (false branch)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--orange);transition-delay:0.3s">
+          <span class="name" style="color:var(--orange);min-width:100px">np2</span>
+          <span class="detail"><code>0x10987548</code> &mdash; Negated Predicate 2 (false branch)</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 style="color:var(--green)">Decision Tree Structure</h3>
+      <div class="code-block" style="font-size:0.72rem"><span class="cmt">// Binary decision tree example:</span>
+
+         [<span class="fn">attribute</span>: js_hasBigString?]
+        /                             \
+   [<span class="kw">p1</span>: yes]                    [<span class="str">np1</span>: no]
+      |                              |
+[<span class="fn">attribute</span>: highEntropy?]  [<span class="cyan">matched</span>: clean]
+    /               \
+[<span class="kw">p2</span>: yes]        [<span class="str">np2</span>: no]
+   |                 |
+[<span class="cyan">matched</span>:     [<span class="cyan">matched</span>:
+ Trojan]       clean]</div>
+      <div class="stat-card mt-2" style="transition-delay:0.35s;border:1px solid rgba(57,255,20,0.3);text-align:left;padding:14px">
+        <span class="label" style="color:var(--green);font-weight:700">child_type byte at offset 0x18</span>
+        <div style="font-size:0.7rem;color:var(--fg2);margin-top:4px;line-height:1.6">
+          <code>0</code> = Null/empty (leaf/terminal)<br>
+          <code>1</code> = Inline string data<br>
+          <code>2</code> = Vector/buffer reference<br>
+          <code>3</code> = Sub-tree reference (recursive)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 7: JIT Compilation -->
+<div class="slide" data-slide="7">
+<div class="slide-inner">
+  <h2 class="glow-purple mb-1">JIT Compilation to Native x86</h2>
+  <p class="desc mb-2">Trees are NOT interpreted &mdash; they are JIT-compiled into executable MOV instruction buffers</p>
+  <div class="split">
+    <div>
+      <h3 style="color:var(--purple)">JIT Emitter @ <code>0x100f226f</code></h3>
+      <div class="code-block" style="font-size:0.72rem"><span class="cmt">// JIT Buffer Location:</span>
+base   = [esi + <span class="num">0x37d4</span>] <span class="cmt">// buffer base</span>
+offset = [esi + <span class="num">0x37dc</span>] <span class="cmt">// write pos</span>
+write_ptr = base + offset
+
+<span class="cmt">// 4-way switch on operand type:</span>
+<span class="kw">case 0</span>: <span class="num">0xC6</span>   <span class="cmt">// MOV byte [addr], imm8</span>
+         <span class="cmt">// 3 bytes total</span>
+<span class="kw">case 1</span>: <span class="num">0xC766</span> <span class="cmt">// MOV word [addr], imm16</span>
+         <span class="cmt">// 5 bytes total</span>
+<span class="kw">case 2</span>: <span class="num">0xC7</span>   <span class="cmt">// MOV dword [addr], imm32</span>
+         <span class="cmt">// 6 bytes total</span>
+<span class="kw">case 3</span>: <span class="num">0xC7</span>x2 <span class="cmt">// Two MOV dword instrs</span>
+         <span class="cmt">// 13 bytes total</span></div>
+    </div>
+    <div>
+      <h3 style="color:var(--purple)">Evaluation Pipeline</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="flow-node" style="background:rgba(255,128,171,0.1);border:1px solid rgba(255,128,171,0.3);transition-delay:0.1s;padding:12px 16px;text-align:left">
+          <strong style="color:var(--pink)">1. Load</strong> tree from node array (32-byte stride)
+        </div>
+        <div class="flow-node" style="background:rgba(179,136,255,0.1);border:1px solid rgba(179,136,255,0.3);transition-delay:0.15s;padding:12px 16px;text-align:left">
+          <strong style="color:var(--purple)">2. JIT</strong> compile tree nodes into MOV instructions
+        </div>
+        <div class="flow-node" style="background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);transition-delay:0.2s;padding:12px 16px;text-align:left">
+          <strong style="color:var(--cyan)">3. Execute</strong> native code against sigattr log
+        </div>
+        <div class="flow-node" style="background:rgba(57,255,20,0.15);border:2px solid rgba(57,255,20,0.4);transition-delay:0.25s;padding:12px 16px;text-align:left;font-weight:700;color:var(--green)">
+          <strong>4. Result</strong> matched = true/false per tree
+        </div>
+      </div>
+      <div class="stat-card mt-2" style="transition-delay:0.3s;border:2px solid rgba(179,136,255,0.4)">
+        <span class="num glow-purple" style="font-size:1rem">Genuine JIT Compilation</span>
+        <span class="label">x86 MOV immediate instructions written directly into executable buffer and executed natively</span>
+      </div>
+      <div class="stat-card mt-1" style="transition-delay:0.35s;border:1px solid rgba(255,82,82,0.3)">
+        <span class="num" style="font-size:0.85rem;color:var(--red)">Spectre Mitigation</span>
+        <span class="label"><code>lfence</code> at 0x1073fe5f before pointer dereference</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 8: SigAttr Log System -->
+<div class="slide" data-slide="8">
+<div class="slide-inner">
+  <h2 class="glow-cyan mb-1">Signature Attribute (SigAttr) Log</h2>
+  <p class="desc mb-2">The feature vector SIG_TREE evaluates over &mdash; circular head/tail log of boolean attributes</p>
+  <div class="split">
+    <div>
+      <h3 style="color:var(--cyan)">Log Structure</h3>
+      <div class="code-block" style="font-size:0.72rem"><span class="kw">struct</span> <span class="fn">SigAttrLog</span> {
+  flags:    <span class="kw">u32</span>,   <span class="cmt">// +0x30: bit 2 = available</span>
+  log_data: <span class="kw">*LogData</span>, <span class="cmt">// +0x44</span>
+}
+
+<span class="kw">struct</span> <span class="fn">LogData</span> {
+  head_log: <span class="kw">Vec&lt;Entry&gt;</span>, <span class="cmt">// +0x08: recent</span>
+  tail_log: <span class="kw">Vec&lt;Entry&gt;</span>, <span class="cmt">// +0x0C: older</span>
+}
+
+<span class="kw">struct</span> <span class="fn">SigAttrEntry</span> {
+  <span class="cmt">// 32 bytes per entry (shl edi, 5)</span>
+  <span class="cmt">// Boolean attribute state</span>
+}</div>
+      <h3 class="mt-2" style="color:var(--cyan)">Lua API Access</h3>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.1s;padding:7px 12px">
+          <span class="detail"><code>sigattr_head</code> @ <code>0x1073dfe0</code> &mdash; Head log entries</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.15s;padding:7px 12px">
+          <span class="detail"><code>sigattr_tail</code> @ <code>0x1073acb0</code> &mdash; Tail log entries</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.2s;padding:7px 12px">
+          <span class="detail"><code>this_sigattrlog</code> @ <code>0x1008bc52</code> &mdash; Current log</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 style="color:var(--cyan)">Result Metadata Parser</h3>
+      <p class="desc" style="font-size:0.78rem">sigattr_events_parser @ <code>0x10564d00</code> parses semicolon-delimited key=value strings:</p>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:8px">
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.1s;padding:7px 12px">
+          <span class="name" style="color:var(--green);min-width:120px;font-size:0.8rem">peattributes=</span>
+          <span class="detail">PE header attributes</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.13s;padding:7px 12px">
+          <span class="name" style="color:var(--green);min-width:120px;font-size:0.8rem">sigattrevents=</span>
+          <span class="detail">Sigattr event list</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.16s;padding:7px 12px">
+          <span class="name" style="color:var(--green);min-width:120px;font-size:0.8rem">imphash=</span>
+          <span class="detail">Import hash</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.19s;padding:7px 12px">
+          <span class="name" style="color:var(--green);min-width:120px;font-size:0.8rem">clusterhash=</span>
+          <span class="detail">Cluster hash</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.22s;padding:7px 12px">
+          <span class="name" style="color:var(--green);min-width:120px;font-size:0.8rem">researchdata=</span>
+          <span class="detail">Research / telemetry data</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.25s;padding:7px 12px">
+          <span class="name" style="color:var(--green);min-width:120px;font-size:0.8rem">LoopILHash=</span>
+          <span class="detail">IL loop hash</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.28s;padding:7px 12px">
+          <span class="name" style="color:var(--green);min-width:120px;font-size:0.8rem">PDBProject=</span>
+          <span class="detail">PDB project path</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 9: Feature Sources -->
+<div class="slide" data-slide="9">
+<div class="slide-inner center-col">
+  <h2 class="glow-orange mb-1">Feature Sources</h2>
+  <p class="desc mb-2">SIG_TREE evaluates over features collected from multiple pipeline stages</p>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;width:100%;max-width:1200px">
+    <div class="stat-card" style="transition-delay:0.1s;text-align:left;padding:18px;border-top:3px solid var(--yellow)">
+      <h3 style="color:var(--yellow);font-size:0.95rem">BRUTE Features (Stage 9)</h3>
+      <div style="font-size:0.75rem;color:var(--fg2);margin-top:8px;line-height:1.8">
+        <code>BRUTE:PDF:Feature:*</code> @ <code>0x10A54CC8</code><br>
+        <code>BRUTE:VBS:Feature:*</code> @ <code>0x10A54D08</code><br>
+        <code>BRUTE:JS:Feature:*</code> @ <code>0x10A54D1C</code>
+      </div>
+    </div>
+    <div class="stat-card" style="transition-delay:0.15s;text-align:left;padding:18px;border-top:3px solid var(--green)">
+      <h3 style="color:var(--green);font-size:0.95rem">NScript JS Features (Stage 8)</h3>
+      <div style="font-size:0.75rem;color:var(--fg2);margin-top:8px;line-height:1.8">
+        21 boolean features extracted during JS deobfuscation:<br>
+        <code>js_hasBigString</code>, <code>js_hasEval</code>,<br>
+        <code>js_hasBase64</code>, <code>js_hasNetworkCalls</code>,<br>
+        <code>js_hasObfuscatedNames</code>, ...
+      </div>
+    </div>
+    <div class="stat-card" style="transition-delay:0.2s;text-align:left;padding:18px;border-top:3px solid var(--purple)">
+      <h3 style="color:var(--purple);font-size:0.95rem">PE Attributes (Stage 3/5)</h3>
+      <div style="font-size:0.75rem;color:var(--fg2);margin-top:8px;line-height:1.8">
+        PE header metadata from static analysis and emulation<br>
+        Reported via <code>peattributes=</code> in result structure<br>
+        HSTR:, SIGATTR:, KCRCE: from static cascade
+      </div>
+    </div>
+    <div class="stat-card" style="transition-delay:0.25s;text-align:left;padding:18px;border-top:3px solid var(--cyan)">
+      <h3 style="color:var(--cyan);font-size:0.95rem">Lua Script Attributes (Stage 10)</h3>
+      <div style="font-size:0.75rem;color:var(--fg2);margin-top:8px;line-height:1.8">
+        Arbitrary attributes via <code>mp.setattribute()</code><br>
+        Feed directly into sigattr log<br>
+        Enable complex multi-stage feature chains
+      </div>
+    </div>
+  </div>
+  <div class="stat-card mt-2" style="transition-delay:0.3s;border:2px solid rgba(255,128,171,0.4);max-width:800px">
+    <span class="num glow-pink" style="font-size:1rem">All features converge in the sigattr log</span>
+    <span class="label">The circular head/tail log accumulates boolean attributes from every pipeline stage, giving SIG_TREE a holistic view of the file under analysis</span>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 10: Key Addresses -->
+<div class="slide" data-slide="10">
+<div class="slide-inner">
+  <h2 class="glow-yellow mb-1">Key Functions &amp; Addresses</h2>
+  <p class="desc mb-2">Core SigTree engine functions from reverse engineering mpengine.dll</p>
+  <div class="split">
+    <div>
+      <h3 style="color:var(--yellow)">Core Functions</h3>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <div class="engine-bar" style="border-left-color:var(--pink);transition-delay:0.05s;padding:7px 12px">
+          <span class="name" style="color:var(--pink);min-width:150px;font-size:0.8rem">sigtree_dispatch</span>
+          <span class="detail mono" style="font-size:0.7rem">0x1073fe00 (130 bytes)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.08s;padding:7px 12px">
+          <span class="name" style="color:var(--cyan);min-width:150px;font-size:0.8rem">sigtree_eval_entry</span>
+          <span class="detail mono" style="font-size:0.7rem">0x1073fe90 (83 bytes)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.11s;padding:7px 12px">
+          <span class="name" style="color:var(--green);min-width:150px;font-size:0.8rem">tree_data_loader</span>
+          <span class="detail mono" style="font-size:0.7rem">0x1012b02a (~100 bytes)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--purple);transition-delay:0.14s;padding:7px 12px">
+          <span class="name" style="color:var(--purple);min-width:150px;font-size:0.8rem">node_to_lua_table</span>
+          <span class="detail mono" style="font-size:0.7rem">0x100f208d (192 bytes)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--orange);transition-delay:0.17s;padding:7px 12px">
+          <span class="name" style="color:var(--orange);min-width:150px;font-size:0.8rem">jit_emitter</span>
+          <span class="detail mono" style="font-size:0.7rem">0x100f226f (216 bytes)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--red);transition-delay:0.2s;padding:7px 12px">
+          <span class="name" style="color:var(--red);min-width:150px;font-size:0.8rem">xor_node_eval</span>
+          <span class="detail mono" style="font-size:0.7rem">0x100f2354 (94 bytes)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--yellow);transition-delay:0.23s;padding:7px 12px">
+          <span class="name" style="color:var(--yellow);min-width:150px;font-size:0.8rem">sigattr_lua_register</span>
+          <span class="detail mono" style="font-size:0.7rem">0x10086bbe (385 bytes)</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 style="color:var(--yellow)">Data Strings</h3>
+      <div class="code-block" style="font-size:0.68rem"><span class="str">"sigtree"</span>            @ <span class="num">0x109c80b0</span>
+<span class="str">"sigtree log is not valid"</span>
+                       @ <span class="num">0x10b52130</span>
+<span class="str">"Invalid sigattr_head index"</span>
+                       @ <span class="num">0x10b5214c</span>
+<span class="str">"sigattr_head"</span>       @ <span class="num">0x1097d710</span>
+<span class="str">"sigattr_tail"</span>       @ <span class="num">0x1097d720</span>
+<span class="str">"this_sigattrlog"</span>    @ <span class="num">0x1097d74c</span></div>
+      <h3 class="mt-2" style="color:var(--yellow)">Object Offsets</h3>
+      <div class="code-block" style="font-size:0.68rem"><span class="fn">+0x2240</span>  Tree data pointer
+<span class="fn">+0x32c</span>   Active tree vector
+<span class="fn">+0x330</span>   Alternate tree vector
+<span class="fn">+0x37d4</span>  JIT buffer base pointer
+<span class="fn">+0x37dc</span>  JIT buffer write offset
+<span class="fn">+0x30</span>    SigAttr flags (bit 2)
+<span class="fn">+0x44</span>    Log data arrays pointer
+<span class="fn">+0x82ee4</span> Sigattr events array
+<span class="fn">+0x836e4</span> Sigattr event count</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 11: Summary -->
+<div class="slide" data-slide="11">
+<div class="slide-inner center-col" style="justify-content:center;gap:20px">
+  <h2 class="glow-pink mb-1">SigTree ML: Summary</h2>
+  <div class="stat-grid stat-grid-4" style="width:100%;max-width:1200px">
+    <div class="stat-card" style="transition-delay:0.05s"><span class="num glow-pink" data-count="33428">0</span><span class="label">Decision Trees Total</span></div>
+    <div class="stat-card" style="transition-delay:0.1s"><span class="num glow-cyan" data-count="14926">0</span><span class="label">SIG_TREE (0x40)</span></div>
+    <div class="stat-card" style="transition-delay:0.15s"><span class="num glow-purple" data-count="3771">0</span><span class="label">SIG_TREE_EXT (0x41)</span></div>
+    <div class="stat-card" style="transition-delay:0.2s"><span class="num glow-orange" data-count="14731">0</span><span class="label">SIG_TREE_BM (0xB3)</span></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;width:100%;max-width:1000px">
+    <div class="stat-card" style="transition-delay:0.25s;text-align:left;padding:16px">
+      <h3 style="color:var(--pink);font-size:0.95rem">On-Device ML Classification</h3>
+      <p style="font-size:0.78rem;color:var(--fg2);margin-top:6px">Decision tree ensemble evaluates boolean predicates over accumulated sigattr features. Produces <code>!MTB</code> and <code>!ml</code> suffixed detections entirely locally.</p>
+    </div>
+    <div class="stat-card" style="transition-delay:0.3s;text-align:left;padding:16px">
+      <h3 style="color:var(--purple);font-size:0.95rem">JIT-Compiled for Speed</h3>
+      <p style="font-size:0.78rem;color:var(--fg2);margin-top:6px">Trees are JIT-compiled to native x86 MOV instructions at <code>0x100f226f</code> for maximum evaluation throughput. Not interpreted.</p>
+    </div>
+    <div class="stat-card" style="transition-delay:0.35s;text-align:left;padding:16px">
+      <h3 style="color:var(--cyan);font-size:0.95rem">Cross-Stage Feature Aggregation</h3>
+      <p style="font-size:0.78rem;color:var(--fg2);margin-top:6px">The sigattr circular log accumulates boolean features from Stages 3, 5, 8, 9, and 10 &mdash; giving trees a holistic view of the file.</p>
+    </div>
+    <div class="stat-card" style="transition-delay:0.4s;text-align:left;padding:16px">
+      <h3 style="color:var(--green);font-size:0.95rem">Critical Detection Layer</h3>
+      <p style="font-size:0.78rem;color:var(--fg2);margin-top:6px">A substantial portion of modern Defender detections are <code>!MTB</code> verdicts. Without SIG_TREE, many threats go undetected.</p>
+    </div>
+  </div>
+  <p class="mono mt-3" style="font-size:0.75rem;color:var(--fg3)">All addresses from RE of mpengine.dll v1.1.24120.x &mdash; 33,428 tree entries across 3 signature types</p>
+</div>
+</div>
+
+</div><!-- /deck -->
+
+<script>
+(function(){
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+  const progress = document.getElementById('progress');
+  const counter = document.getElementById('slide-counter');
+  function parseHash(){const h=parseInt(location.hash.replace('#',''),10);if(h>=1&&h<=total)return h-1;return 0;}
+  function goTo(n,skipHash){
+    if(n<0||n>=total||n===current)return;
+    slides[current].classList.remove('active');
+    slides[current].classList.add(n>current?'prev':'');
+    const old=slides[current];setTimeout(()=>old.classList.remove('prev'),600);
+    current=n;slides[current].classList.add('active');
+    progress.style.width=((current+1)/total*100)+'%';
+    counter.textContent=(current+1)+' / '+total;
+    if(!skipHash)location.hash='#'+(current+1);
+    animateCounters(slides[current]);
+  }
+  function next(){goTo(current+1);}
+  function prev(){goTo(current-1);}
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();next();}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();prev();}
+    else if(e.key==='Home'){e.preventDefault();goTo(0);}
+    else if(e.key==='End'){e.preventDefault();goTo(total-1);}
+  });
+  document.getElementById('deck').addEventListener('click',function(e){
+    if(e.clientX<window.innerWidth*0.35)prev();
+    else if(e.clientX>window.innerWidth*0.65)next();
+  });
+  let touchStartX=0;
+  document.addEventListener('touchstart',function(e){touchStartX=e.changedTouches[0].clientX;},{passive:true});
+  document.addEventListener('touchend',function(e){const dx=e.changedTouches[0].clientX-touchStartX;if(Math.abs(dx)>50){if(dx<0)next();else prev();}},{passive:true});
+  window.addEventListener('hashchange',function(){goTo(parseHash(),true);});
+  function animateCounters(el){
+    el.querySelectorAll('[data-count]').forEach(function(n){
+      const target=parseInt(n.getAttribute('data-count'),10);if(isNaN(target))return;
+      const start=performance.now();
+      function tick(now){const t=Math.min((now-start)/1200,1);const eased=1-Math.pow(1-t,3);
+        n.textContent=Math.round(target*eased).toLocaleString();if(t<1)requestAnimationFrame(tick);}
+      requestAnimationFrame(tick);
+    });
+  }
+  const startSlide=parseHash();if(startSlide!==0)slides[0].classList.remove('active');
+  current=startSlide;slides[current].classList.add('active');
+  progress.style.width=((current+1)/total*100)+'%';
+  counter.textContent=(current+1)+' / '+total;
+  setTimeout(function(){animateCounters(slides[current]);},300);
+})();
+</script>
+<script src="deck_master_nav.js"></script>
+</body>
+</html>

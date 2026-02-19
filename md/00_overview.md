@@ -210,6 +210,16 @@ File/Buffer Input
          │
          ▼
 ┌──────────────────────────────────────────────────────────────────┐
+│  CROSS-CUTTING: SigTree ML Classification (§14)                  │
+│  33,428 decision trees evaluate sigattr boolean features.        │
+│  JIT-compiled into native x86 for speed. Produces !ml/!MTB.     │
+│  String: "sigtree" @ 0x109C80B0                                 │
+│          "SIGNATURE_TYPE_SIGTREE" @ 0x10986C88                   │
+│          "sigattr_head" @ 0x1097D710                              │
+└────────┬─────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────────────────────────────────┐
 │  STAGE 12: MAPS Cloud Lookup (§12)                               │
 │  Lowfi match → Bond serialize → HTTPS POST → parse response.    │
 │  Delivers FASTPATH dynamic signatures (SDN, TDN, DATA).         │
@@ -249,6 +259,7 @@ File/Buffer Input
 | Virtual files | 144 | VDM VFILE entries |
 | DBVARs (config entries) | 547 | VDM DBVAR entries |
 | FOP behavioral rules | 4,601 | VDM FOP entries |
+| SIG_TREE ML trees | 33,428 | VDM SIG_TREE + EXT + BM |
 | Threat name prefixes | 504 | VDM prefix table |
 | TLV entries | 9.3M | Across 4 VDM files |
 | Signature types | 158+ | TLV type constants |

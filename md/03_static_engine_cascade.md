@@ -60,9 +60,9 @@ of the primary engines rather than standalone stages:
 | **NID**               | `SIGNATURE_TYPE_NID`                   | `0x10986AD0`  | Network Inspection Detection          |
 | **NID64**             | `SIGNATURE_TYPE_NID64`                 | `0x10987174`  | 64-bit NID variant                    |
 | **BM_INFO**           | `SIGNATURE_TYPE_BM_INFO`               | `0x10986C58`  | Behavioral monitoring info records    |
-| **SIGTREE**           | `SIGNATURE_TYPE_SIGTREE`               | `0x10986C88`  | Hierarchical signature tree           |
-| **SIGTREE_EXT**       | `SIGNATURE_TYPE_SIGTREE_EXT`           | `0x10987008`  | Extended signature tree               |
-| **SIGTREE_BM**        | `SIGNATURE_TYPE_SIGTREE_BM`            | `0x109871D4`  | BM-specific signature tree            |
+| **SIGTREE**           | `SIGNATURE_TYPE_SIGTREE`               | `0x10986C88`  | ML decision tree classifier (~14,926 trees). See [SigTree ML (SS14)](14_sigtree_ml_classification.md) |
+| **SIGTREE_EXT**       | `SIGNATURE_TYPE_SIGTREE_EXT`           | `0x10987008`  | Extended ML decision tree (~3,771 trees). See [SS14](14_sigtree_ml_classification.md) |
+| **SIGTREE_BM**        | `SIGNATURE_TYPE_SIGTREE_BM`            | `0x109871D4`  | Behavioral monitoring ML trees (~14,731 trees). See [SS14](14_sigtree_ml_classification.md) |
 
 ---
 

@@ -13,7 +13,8 @@
     "10_lua_scripts_slides.html",
     "11_aaggregator_evaluation_slides.html",
     "12_maps_cloud_lookup_slides.html",
-    "13_verdict_resolution_slides.html"
+    "13_verdict_resolution_slides.html",
+    "14_sigtree_ml_model_slides.html"
   ];
 
   const currentFile = location.pathname.split("/").pop();

@@ -200,8 +200,9 @@ JavaScript interpreter evaluates expressions to resolve obfuscation.
 ## JScript Feature Attributes
 
 The engine extracts detailed structural features from JavaScript content for
-ML-based classification. These attributes are set during parsing and made
-available to Lua scripts and BRUTE matching:
+ML-based classification. These boolean attributes are deposited into the sigattr log
+and evaluated by the [SigTree ML decision tree ensemble (SS14)](14_sigtree_ml_classification.md)
+to produce `!ml` and `!MTB` detections. They are also available to Lua scripts and BRUTE matching:
 
 | Attribute | Address | Purpose |
 |-----------|---------|---------|
