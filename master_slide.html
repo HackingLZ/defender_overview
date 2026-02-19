@@ -3,71 +3,171 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Master Slide Navigator</title>
+<title>Master Slide Navigator — Defender Scan Pipeline</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#070a14;
-  --bg2:#10182b;
-  --fg:#eef2ff;
-  --fg2:#c2cce8;
-  --fg3:#92a0c7;
-  --line:rgba(172,190,240,.28);
-  --accent:#59d3ff;
-  --accent2:#8bff92;
+  --bg:#060911;
+  --bg2:#0c1120;
+  --bg3:#131a2e;
+  --fg:#eef1fa;
+  --fg2:#b4bdd4;
+  --fg3:#7a849e;
+  --line:rgba(140,160,220,.15);
+  --glass:rgba(14,20,38,.55);
+  --glass-border:rgba(140,160,220,.12);
+  --cyan:#00e5ff;
+  --green:#39ff14;
+  --purple:#b388ff;
+  --orange:#ff9100;
+  --yellow:#ffd740;
+  --mono:'SF Mono','Fira Code','Cascadia Code','JetBrains Mono',Consolas,monospace;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,sans-serif;
 }
 html,body{height:100%}
 body{
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  font-family:var(--sans);
   color:var(--fg);
-  background:
-    radial-gradient(1200px 700px at -10% -20%,rgba(89,211,255,.18),transparent 60%),
-    radial-gradient(900px 500px at 110% 120%,rgba(139,255,146,.14),transparent 60%),
-    linear-gradient(145deg,var(--bg),#0c1324 60%,#09101e);
+  background:var(--bg);
   min-height:100%;
   padding:28px;
+  overflow-x:hidden;
 }
-.wrap{max-width:1300px;margin:0 auto;display:grid;gap:20px}
-.hero{background:rgba(16,24,43,.65);border:1px solid var(--line);border-radius:18px;padding:24px}
-.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3)}
-h1{font-size:clamp(1.9rem,4vw,3.2rem);line-height:1.12;margin-top:10px}
-p{margin-top:10px;color:var(--fg2);line-height:1.5}
-.actions{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px}
+
+/* background effects */
+.bg-grid{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(140,160,220,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(140,160,220,.04) 1px,transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 80% 60% at 50% 30%,black 20%,transparent 70%);
+}
+.bg-glow{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(800px 500px at 15% 10%,rgba(0,229,255,.10),transparent 60%),
+    radial-gradient(600px 400px at 85% 90%,rgba(179,136,255,.08),transparent 60%);
+}
+
+.wrap{max-width:1300px;margin:0 auto;display:grid;gap:20px;position:relative;z-index:1}
+
+/* hero panel */
+.hero{
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  border-radius:18px;padding:32px;
+  backdrop-filter:blur(16px);
+  animation:fadeUp .6s ease both;
+}
+.kicker{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);font-weight:600;
+}
+.kicker .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+h1{
+  font-size:clamp(1.9rem,4vw,3.2rem);line-height:1.12;margin-top:12px;font-weight:800;letter-spacing:-.02em;
+}
+h1 .accent{
+  background:linear-gradient(135deg,var(--cyan),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+p{margin-top:10px;color:var(--fg2);line-height:1.6;font-size:15px}
+.actions{margin-top:20px;display:flex;flex-wrap:wrap;gap:10px}
+
 .btn{
-  display:inline-flex;align-items:center;justify-content:center;
-  padding:10px 14px;border-radius:10px;
-  border:1px solid var(--line);
-  color:var(--fg);text-decoration:none;background:rgba(7,10,20,.6);
-  font-weight:600;font-size:14px
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:12px 18px;border-radius:10px;
+  border:1px solid var(--glass-border);
+  color:var(--fg);text-decoration:none;
+  background:rgba(7,10,20,.6);
+  font-weight:700;font-size:14px;
+  transition:all .2s ease;
 }
-.btn.primary{border-color:rgba(89,211,255,.6);box-shadow:0 0 0 1px rgba(89,211,255,.28) inset}
-.btn.good{border-color:rgba(139,255,146,.55);box-shadow:0 0 0 1px rgba(139,255,146,.25) inset}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary{
+  border-color:rgba(0,229,255,.4);
+  background:linear-gradient(135deg,rgba(0,229,255,.12),rgba(179,136,255,.12));
+  box-shadow:0 0 24px rgba(0,229,255,.1),inset 0 1px 0 rgba(255,255,255,.05);
+}
+.btn.primary:hover{border-color:rgba(0,229,255,.6);box-shadow:0 0 40px rgba(0,229,255,.18)}
+.btn.good{
+  border-color:rgba(57,255,20,.35);
+  box-shadow:0 0 0 1px rgba(57,255,20,.15) inset;
+}
+.btn.good:hover{border-color:rgba(57,255,20,.55);box-shadow:0 0 24px rgba(57,255,20,.12)}
 .btn[aria-disabled="true"]{opacity:.35;pointer-events:none}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+
+/* deck grid */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:12px;
+  animation:fadeUp .6s ease .1s both;
+}
 .card{
   display:block;
-  background:rgba(16,24,43,.62);
-  border:1px solid var(--line);
+  background:var(--glass);
+  border:1px solid var(--glass-border);
   border-radius:14px;
-  padding:14px;
+  padding:18px;
   color:inherit;
   text-decoration:none;
+  backdrop-filter:blur(12px);
+  transition:all .25s ease;
+  position:relative;overflow:hidden;
 }
-.card:hover{border-color:rgba(89,211,255,.5);transform:translateY(-1px)}
-.idx{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg3)}
-.name{font-weight:700;font-size:16px;margin-top:6px;line-height:1.25}
-.meta{font-size:12px;color:var(--fg2);margin-top:8px}
-.footer{font-size:12px;color:var(--fg3)}
-@media(max-width:980px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media(max-width:640px){body{padding:16px}.hero{padding:18px}.grid{grid-template-columns:1fr}}
+.card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(0,229,255,.04),transparent 60%);
+  opacity:0;transition:opacity .3s;
+}
+.card:hover::before{opacity:1}
+.card:hover{
+  border-color:rgba(0,229,255,.3);
+  box-shadow:0 8px 32px rgba(0,0,0,.25),0 0 16px rgba(0,229,255,.05);
+  transform:translateY(-3px);
+}
+.idx{
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg3);
+  position:relative;
+}
+.name{
+  font-weight:700;font-size:16px;margin-top:8px;line-height:1.3;
+  position:relative;
+}
+.meta{font-size:12px;color:var(--fg3);margin-top:8px;position:relative}
+
+.home-link{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:13px;color:var(--fg3);text-decoration:none;
+  transition:color .2s;
+}
+.home-link:hover{color:var(--cyan)}
+.home-link svg{width:14px;height:14px;fill:currentColor}
+
+.footer{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:12px;color:var(--fg3);
+  animation:fadeUp .6s ease .2s both;
+}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:640px){body{padding:16px}.hero{padding:20px}.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
 <div class="wrap">
   <section class="hero">
-    <div class="kicker">Presentation Control</div>
-    <h1>Master Slide Navigator</h1>
-    <p>Use this page to jump between deck files, or continue in sequence to the next stage. In any deck, pressing next on the final slide automatically opens the next deck.</p>
+    <div class="kicker"><span class="dot"></span> Presentation Control</div>
+    <h1>Master <span class="accent">Slide Navigator</span></h1>
+    <p>Jump between deck files or continue in sequence to the next stage. In any deck, press <strong>Next</strong> on the final slide to auto-advance, or press <strong>M</strong> to return here.</p>
     <div class="actions">
       <a id="back-btn" class="btn" href="#">Back</a>
       <a class="btn primary" href="slides/00_overview_slides.html#1">Start Full Sequence</a>
@@ -78,65 +178,64 @@ p{margin-top:10px;color:var(--fg2);line-height:1.5}
 
   <section class="grid" id="deck-grid"></section>
 
-  <div class="footer">Tip: from any deck, press <code>M</code> to return to this master slide.</div>
+  <div class="footer">
+    <span>Tip: press <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-family:var(--mono)">M</code> from any deck to return here</span>
+    <a class="home-link" href="index.html">
+      <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      Home
+    </a>
+  </div>
 </div>
 
 <script>
 (function(){
-  const decks = [
-    { file: "slides/00_overview_slides.html", title: "00 Overview" },
-    { file: "slides/01_entry_point_slides.html", title: "01 Entry Point" },
-    { file: "slides/02_friendly_file_slides.html", title: "02 Friendly File" },
-    { file: "slides/03_static_engine_cascade_slides.html", title: "03 Static Engine Cascade" },
-    { file: "slides/04_aaggregator_collection_slides.html", title: "04 AAGGREGATOR Collection" },
-    { file: "slides/05_pe_emulation_slides.html", title: "05 PE Emulation" },
-    { file: "slides/06_unpacked_content_slides.html", title: "06 Unpacked Content" },
-    { file: "slides/07_container_extraction_slides.html", title: "07 Container Extraction" },
-    { file: "slides/08_script_deobfuscation_slides.html", title: "08 Script Deobfuscation" },
-    { file: "slides/09_brute_matching_slides.html", title: "09 BRUTE Matching" },
-    { file: "slides/10_lua_scripts_slides.html", title: "10 Lua Scripts" },
-    { file: "slides/11_aaggregator_evaluation_slides.html", title: "11 AAGGREGATOR Evaluation" },
-    { file: "slides/12_maps_cloud_lookup_slides.html", title: "12 MAPS Cloud Lookup" },
-    { file: "slides/13_verdict_resolution_slides.html", title: "13 Verdict Resolution" }
+  var decks = [
+    {file:"slides/00_overview_slides.html",title:"00 Overview",desc:"Pipeline architecture, data structures, export API"},
+    {file:"slides/01_entry_point_slides.html",title:"01 Entry Point",desc:"__rsignal dispatch, command codes, ScanContext init"},
+    {file:"slides/02_friendly_file_slides.html",title:"02 Friendly File",desc:"SHA-256/512 whitelist bypass"},
+    {file:"slides/03_static_engine_cascade_slides.html",title:"03 Static Engine Cascade",desc:"11 signature engines in fixed order"},
+    {file:"slides/04_aaggregator_collection_slides.html",title:"04 AAGGREGATOR Collection",desc:"Attribute accumulation mechanism"},
+    {file:"slides/05_pe_emulation_slides.html",title:"05 PE Emulation",desc:"x86/x64/ARM CPU emu, 198 WinAPIs"},
+    {file:"slides/06_unpacked_content_slides.html",title:"06 Unpacked Content",desc:"Recursive rescan of emulated content"},
+    {file:"slides/07_container_extraction_slides.html",title:"07 Container Extraction",desc:"70+ format handlers via nUFS"},
+    {file:"slides/08_script_deobfuscation_slides.html",title:"08 Script Deobfuscation",desc:"NScript for PS, VBS, JS, BAT"},
+    {file:"slides/09_brute_matching_slides.html",title:"09 BRUTE Matching",desc:"Format-agnostic HSTR matching"},
+    {file:"slides/10_lua_scripts_slides.html",title:"10 Lua Scripts",desc:"59,415 Lua scripts with mp.* API"},
+    {file:"slides/11_aaggregator_evaluation_slides.html",title:"11 AAGGREGATOR Evaluation",desc:"Boolean expression evaluator"},
+    {file:"slides/12_maps_cloud_lookup_slides.html",title:"12 MAPS Cloud Lookup",desc:"Bond serialization + FASTPATH"},
+    {file:"slides/13_verdict_resolution_slides.html",title:"13 Verdict Resolution",desc:"Final threat name resolution"}
   ];
 
-  const grid = document.getElementById("deck-grid");
+  var grid = document.getElementById("deck-grid");
   decks.forEach(function(deck, i){
-    const card = document.createElement("a");
+    var card = document.createElement("a");
     card.className = "card";
     card.href = deck.file + "#1";
     card.innerHTML =
       '<div class="idx">Deck ' + String(i + 1).padStart(2, "0") + ' of ' + String(decks.length).padStart(2, "0") + '</div>' +
       '<div class="name">' + deck.title + '</div>' +
-      '<div class="meta">Open deck at slide 1</div>';
+      '<div class="meta">' + deck.desc + '</div>';
     grid.appendChild(card);
   });
 
-  const params = new URLSearchParams(location.search);
-  const fromRaw = Number(params.get("from"));
-  const fromIndex = Number.isInteger(fromRaw) ? fromRaw : -1;
+  var params = new URLSearchParams(location.search);
+  var fromRaw = Number(params.get("from"));
+  var fromIndex = Number.isInteger(fromRaw) ? fromRaw : -1;
 
-  const backBtn = document.getElementById("back-btn");
-  const continueBtn = document.getElementById("continue-btn");
-  const resumeBtn = document.getElementById("resume-btn");
+  var backBtn = document.getElementById("back-btn");
+  var continueBtn = document.getElementById("continue-btn");
+  var resumeBtn = document.getElementById("resume-btn");
 
   backBtn.addEventListener("click", function(e){
     e.preventDefault();
-    if (window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-    if (fromIndex >= 0 && fromIndex < decks.length) {
-      location.href = decks[fromIndex].file + "#1";
-      return;
-    }
+    if (window.history.length > 1) { window.history.back(); return; }
+    if (fromIndex >= 0 && fromIndex < decks.length) { location.href = decks[fromIndex].file + "#1"; return; }
     location.href = decks[0].file + "#1";
   });
 
   if (fromIndex >= 0 && fromIndex < decks.length) {
     resumeBtn.href = decks[fromIndex].file + "#1";
     resumeBtn.textContent = "Resume " + decks[fromIndex].title;
-
     if (fromIndex + 1 < decks.length) {
       continueBtn.href = decks[fromIndex + 1].file + "#1";
       continueBtn.textContent = "Continue: " + decks[fromIndex + 1].title;
