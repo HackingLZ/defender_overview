@@ -578,82 +578,134 @@ the sigattr log for SIG_TREE evaluation.
 
 ---
 
-## d3fender Reimplementation Status
+## Evaluation Behavior (Reverse-Engineered)
 
-### Current State: NOT IMPLEMENTED (Critical Gap)
+### Weighted Scoring System (FUN_1007ced5)
 
-The d3fender codebase currently **silently discards** all 33,428 SIG_TREE entries during VDM
-parsing. In `src/vdm/index.rs` (line ~583):
+The tree evaluator uses weighted scoring over sigattr slots:
 
-```rust
-| sig_types::SIG_TREE | sig_types::SIG_TREE_EXT | sig_types::SIG_TREE_BM
-| sig_types::KVIR32 | sig_types::POLY_VIR32
-// ...
-=> {
-    // Consumed silently: policy, cleanup, metadata, legacy, and
-    // obsolete types that don't affect detection.
-}
-```
+- **Node weights**: `sig_flags` bytes 2-3 encode per-node weight (26,165 unique weight values observed)
+- **Slot formula**: `base + attr_idx * 0x90 - 0x2C4`
+- **Accumulation**: `slot[1] += weight`, high-water mark: `if slot[0] < slot[1] then slot[0] = slot[1]`
+- **Weight thresholds**: > `0x10` for "best score" tracking, > `0x13` with category `0x06` for escalation
+- **Per-tree totals**: Range from ~1,075 to ~64,256
 
-**This comment is incorrect** — SIG_TREE entries are NOT obsolete. They are the active
-on-device ML classification system responsible for `!MTB` and `!ml` detections.
+### Priority Arbitration (FUN_1018d68b)
 
-### Signature Type Constants (Already Defined)
+Detection output uses priority-based arbitration, **not** score aggregation across trees:
 
-In `src/vdm/sig_types.rs`:
-```rust
-pub const SIG_TREE: u8 = 0x40;      // line 81
-pub const SIG_TREE_EXT: u8 = 0x41;  // line 82
-pub const SIG_TREE_BM: u8 = 0xB3;   // line 144
-```
+- **Level 1** (specific named threat): e.g. `Trojan:Win32/Foo.A!MTB` — highest priority
+- **Level 2** (generic heuristic): e.g. `HLL/Generic` — lower priority
+- **First level-1 detection wins** and short-circuits evaluation
+- **"HLL" prefix** detections are suppressed
+- **InfrastructureShared** trees are infrastructure classifiers, not user-visible threat names
 
-### Implementation Requirements
+### Detection Criteria (0x40 trees)
 
-To implement SIG_TREE evaluation in d3fender:
+Three attribute categories determine detection:
+1. **Trivial** (16 attrs): Always true for x86 PEs (`no_mipsgp`, `executable_image`, etc.)
+2. **Discriminating** (34 attrs): Malware-specific indicators (`packed`, W+X section, etc.)
+3. **Nontrivial**: Everything not trivial
 
-1. **Parse 32-byte tree nodes** from VDM TLV entries (type 0x40, 0x41, 0xB3)
-2. **Build sigattr log** accumulating boolean attributes from PEHSTR, BRUTE, NScript, emulation
-3. **Implement tree evaluator** walking the binary decision tree over sigattr entries
-4. **Emit detections** with `!MTB`/`!ml` suffixes for matched trees
-5. **Optional**: JIT compilation for performance (the engine JITs to x86, but
-   interpreted evaluation would be functionally correct)
+### VDM Statistics
 
-### Priority
+| Metric | Value |
+|--------|-------|
+| Total trees | 33,428 |
+| Total nodes | 408,708 |
+| Nodes with inline strings | 66,163 |
+| Unique inline strings | 35,965 |
+| Unique weight values | 26,165 |
+| Max nodes per tree | 250 |
+| SIG_TREE parse completeness | 100% |
+| SIG_TREE_EXT parse completeness | 89% |
+| SIG_TREE_BM parse completeness | 47% |
 
-**HIGH** — SIG_TREE accounts for a substantial portion of modern Defender detections.
-Many contemporary malware detections rely on `!MTB` verdicts. Without SIG_TREE, d3fender
-cannot reproduce a significant fraction of Defender's detection capability.
+---
+
+## PE Boolean Attribute System
+
+SIG_TREE 0x40 trees use boolean PE attributes indexed by `sig_flags` byte 0. The
+peattributes table at mpengine.dll offset **0x00982F30** defines ~300 flags:
+
+| Index | Attribute | Description |
+|-------|-----------|-------------|
+| `0x00` | `lastscn_writable` | Last section is writable |
+| `0x03` | `no_relocs` | No relocation directory |
+| `0x08` | `epscn_eqsizes` | EP section virtual = raw size |
+| `0x0E` | `epatscnstart` | EP at section start |
+| `0x11` | `packed` | File appears packed |
+| `0x16` | `isdll` | Is a DLL |
+| `0x1E` | `entrybyte55` | EP starts with PUSH EBP |
+| `0x1F` | `headerchecksum0` | PE checksum is zero |
+| `0x21` | `no_imports` | No imports |
+| `0x28` | `issuspicious` | File is suspicious |
+| `0x67` | `suspicious_section_characteristics` | W+X section |
+| `0x6F` | `no_fixups` | No relocation table |
+| `0x72` | `no_mipsgp` | No MIPS GP (true for x86) |
+| `0x73` | `no_tls` | No TLS directory |
+| `0x7A` | `executable_image` | IMAGE_FILE_EXECUTABLE_IMAGE |
+| `0x8D` | `nx_bit_set` | DEP/NX compatible |
+| `0x9D` | `aslr_bit_set` | ASLR enabled |
+| `0x9F` | `amd64_image` | AMD64 machine type |
+| `0xC3` | `ismsil` | .NET MSIL binary |
+
+A separate **PE Header Field Table** at file offset **0x00B516A8** provides 38 entries mapping
+PE header field names to indices 0-37, used by the Lua `pehdr.__index` handler.
+
+---
+
+## Tree Type Classification
+
+7 tree_type values are used (set in header byte 3):
+
+| tree_type | Name | Count | With Strings | Description |
+|-----------|------|-------|--------------|-------------|
+| 0 | UNKNOWN | 196 | 0 | Unknown/legacy |
+| 1 | LEAF | 1,264 | 36 | Leaf-only trees |
+| 2 | EXT | 14,731 | 10,046 | Extended (BM sig type) |
+| 3 | BM | 8,607 | 1,657 | Behavioral monitoring |
+| 4 | PEST | 358 | 90 | PE static analysis |
+| 5 | NID | 6,961 | 1,059 | Named ID trees |
+| 6 | MACRO | 1,311 | 905 | Office macro trees |
+
+---
+
+## Key mpengine.dll Functions
+
+| Address | Name | Description |
+|---------|------|-------------|
+| `0x104c05a0` | SIG_TREE_Init | Plugin init, registers handlers for 0x40, 0x41, 0xB3 |
+| `0x104c03a0` | Handler_0x40 | SIG_TREE handler |
+| `0x104c04a0` | Handler_0x41 | SIG_TREE_EXT handler |
+| `0x104c0420` | Handler_0xB3 | SIG_TREE_BM handler |
+| `0x104bd759` | NodeExpansion | 16-byte VDM → 36-byte intermediate |
+| `0x104bdc13` | Finalization | Sort + group + serialize |
+| `0x104bab80` | SortComparator | Introsort for node ordering |
+| `0x1014bc5f` | Serialization | 36-byte → 32-byte runtime |
+| `0x1012b02a` | TreeDataLoader | Reads 32-byte entries at scan time |
+| `0x1007ccdd` | NodeDispatcher | Dispatches on marker byte (0x30) |
+| `0x1007ce03` | RangeEvaluator | Calls slot comparison |
+| `0x1007ced5` | SlotComparison | Weighted scoring in sigattr slots |
+| `0x100d3c29` | AttrNameResolver | Binary search name → index |
+| `0x1018d68b` | DetectionArbitrator | Priority-based detection selection (L1 > L2) |
 
 ---
 
 ## Open Questions
 
-1. **Full 16-byte VDM node field mapping** — The 16-byte on-disk node format has been
-   partially decoded (header at bytes 0-1, attribute index at byte 4, type marker at
-   byte 5, hash at bytes 7-10). The exact semantics of bytes 2-3, 6, and 11-15 need
-   further confirmation via larger sample analysis.
+1. **Attribute ID mapping** — The `attribute_id` field (u16 at node+0x02 in 32-byte format) indexes
+   into the sigattr log, but the mapping from numeric IDs to named features (like
+   `Nscript:js_hasBigString`) needs further investigation. CRC16 hashing tests show noise-level
+   matches (~85/329), suggesting a table-based rather than hash-based mapping.
 
-2. **16→32 byte expansion logic** — How the 16-byte VDM nodes expand to 32-byte in-memory
-   nodes. Likely involves resolving child pointers, pre-computing evaluation state, and
-   adding alignment padding.
+2. **SIG_TREE_BM parse completeness** — 47% of BM trees parse correctly. BM uses u8 node_count
+   at data[0] (not u16), and data[1] is a separate depth/variant field (values 0x00-0x04).
 
-3. **JIT vs. interpreted evaluation** — The JIT emitter (fcn.100f226f) compiles trees to
-   x86 MOV instructions. It's unclear whether there is also an interpreted fallback path
-   or if JIT is the only evaluation method.
+3. **Simplified tree walk** — The real engine walks one path root-to-leaf with branch/sibling
+   fallback and uses accumulated weights to choose paths. Full path-selection logic is partially
+   understood but not yet fully reproduced.
 
-4. **SIG_TREE vs SIG_TREE_EXT differences** — SIG_TREE uses fixed 16-byte nodes.
-   SIG_TREE_EXT embeds inline path strings with wildcard patterns (0x90 escape byte),
-   making nodes variable-length. SIG_TREE_BM uses type marker 0x40 (vs 0x30) and can
-   contain UTF-16LE behavioral patterns. The exact evaluation semantics differ — EXT
-   appears to match file system paths, BM matches behavioral indicators.
-
-5. **Tree ensemble strategy** — How multiple trees combine to produce a final verdict
-   (majority vote, threshold, sequential evaluation) is not yet confirmed.
-
-6. **Attribute ID mapping** — The `attribute_id` field (byte at node+4) indexes into
-   the sigattr log, but the mapping from numeric IDs to named features (like
-   `Nscript:js_hasBigString`) needs further investigation.
-
-7. **Wildcard pattern matching** — The 0x90 escape byte in SIG_TREE_EXT path strings
-   encodes wildcard patterns (0x90 0x02 0xNN = wildcard with NN min-length). The full
-   pattern matching grammar needs further RE.
+4. **Wildcard pattern matching** — The 0x90 escape byte in SIG_TREE_EXT path strings encodes
+   wildcard patterns (`0x90 0x02 0xNN` = wildcard with NN min-length). The full pattern matching
+   grammar needs further RE.

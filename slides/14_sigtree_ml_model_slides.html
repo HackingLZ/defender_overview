@@ -461,63 +461,117 @@ write_ptr = base + offset
 </div>
 </div>
 
-<!-- SLIDE 10: Key Addresses -->
+<!-- SLIDE 10: Weighted Scoring & Priority Arbitration -->
 <div class="slide" data-slide="10">
 <div class="slide-inner">
+  <h2 class="glow-yellow mb-1">Scoring &amp; Detection Arbitration</h2>
+  <p class="desc mb-2">Weighted scoring over sigattr slots with priority-based detection selection</p>
+  <div class="split">
+    <div>
+      <h3 style="color:var(--yellow)">Weighted Scoring (FUN_1007ced5)</h3>
+      <div class="code-block" style="font-size:0.7rem"><span class="cmt">// Per-node weight from sig_flags bytes 2-3</span>
+<span class="cmt">// 26,165 unique weight values observed</span>
+
+slot = base + attr_idx * <span class="num">0x90</span> - <span class="num">0x2C4</span>
+slot[<span class="num">1</span>] += weight
+<span class="kw">if</span> slot[<span class="num">0</span>] < slot[<span class="num">1</span>]:
+    slot[<span class="num">0</span>] = slot[<span class="num">1</span>]  <span class="cmt">// high-water</span>
+
+<span class="cmt">// Threshold gates:</span>
+<span class="kw">if</span> weight > <span class="num">0x10</span>: <span class="cmt">best score tracking</span>
+<span class="kw">if</span> weight > <span class="num">0x13</span> && cat==<span class="num">0x06</span>: <span class="cmt">escalation</span>
+
+<span class="cmt">// Per-tree totals: ~1,075 to ~64,256</span></div>
+      <h3 class="mt-2" style="color:var(--yellow)">PE Boolean Attributes</h3>
+      <div class="code-block" style="font-size:0.68rem"><span class="cmt">// Table @ 0x00982F30 (~300 flags)</span>
+<span class="str">lastscn_writable</span>  <span class="num">0x00</span>
+<span class="str">no_relocs</span>         <span class="num">0x03</span>
+<span class="str">packed</span>            <span class="num">0x11</span>
+<span class="str">isdll</span>             <span class="num">0x16</span>
+<span class="str">entrybyte55</span>       <span class="num">0x1E</span>  <span class="cmt">PUSH EBP</span>
+<span class="str">issuspicious</span>      <span class="num">0x28</span>
+<span class="str">W+X section</span>       <span class="num">0x67</span>
+<span class="str">executable_image</span>  <span class="num">0x7A</span>
+<span class="str">nx_bit_set</span>        <span class="num">0x8D</span>
+<span class="str">aslr_bit_set</span>      <span class="num">0x9D</span></div>
+    </div>
+    <div>
+      <h3 style="color:var(--orange)">Priority Arbitration (FUN_1018d68b)</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="flow-node" style="background:rgba(255,82,82,0.15);border:2px solid rgba(255,82,82,0.4);transition-delay:0.1s;padding:12px 16px;text-align:left">
+          <strong style="color:var(--red)">Level 1 (Highest):</strong> Named threat<br><span style="font-size:0.7rem;color:var(--fg2)">e.g. Trojan:Win32/Foo.A!MTB &mdash; first match wins, short-circuits</span>
+        </div>
+        <div class="flow-node" style="background:rgba(255,215,64,0.1);border:1px solid rgba(255,215,64,0.3);transition-delay:0.15s;padding:12px 16px;text-align:left">
+          <strong style="color:var(--yellow)">Level 2:</strong> Generic heuristic<br><span style="font-size:0.7rem;color:var(--fg2)">e.g. HLL/Generic &mdash; lower priority, suppressible</span>
+        </div>
+        <div class="flow-node" style="background:rgba(179,136,255,0.1);border:1px solid rgba(179,136,255,0.3);transition-delay:0.2s;padding:12px 16px;text-align:left">
+          <strong style="color:var(--purple)">Infrastructure:</strong> InfrastructureShared<br><span style="font-size:0.7rem;color:var(--fg2)">Classifiers only &mdash; not user-visible threat names</span>
+        </div>
+      </div>
+      <h3 class="mt-2" style="color:var(--orange)">7 Tree Types</h3>
+      <div class="code-block" style="font-size:0.65rem"><span class="num">0</span> UNKNOWN   <span class="fg3">196 trees</span>
+<span class="num">1</span> LEAF      <span class="fg3">1,264 trees</span>
+<span class="num">2</span> EXT       <span class="fg3">14,731 trees (BM)</span>
+<span class="num">3</span> BM        <span class="fg3">8,607 trees</span>
+<span class="num">4</span> PEST      <span class="fg3">358 trees (PE static)</span>
+<span class="num">5</span> NID       <span class="fg3">6,961 trees</span>
+<span class="num">6</span> MACRO     <span class="fg3">1,311 trees</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 11: Key Addresses -->
+<div class="slide" data-slide="11">
+<div class="slide-inner">
   <h2 class="glow-yellow mb-1">Key Functions &amp; Addresses</h2>
-  <p class="desc mb-2">Core SigTree engine functions from reverse engineering mpengine.dll</p>
+  <p class="desc mb-2">14 core functions from reverse engineering mpengine.dll</p>
   <div class="split">
     <div>
       <h3 style="color:var(--yellow)">Core Functions</h3>
-      <div style="display:flex;flex-direction:column;gap:5px">
-        <div class="engine-bar" style="border-left-color:var(--pink);transition-delay:0.05s;padding:7px 12px">
-          <span class="name" style="color:var(--pink);min-width:150px;font-size:0.8rem">sigtree_dispatch</span>
-          <span class="detail mono" style="font-size:0.7rem">0x1073fe00 (130 bytes)</span>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div class="engine-bar" style="border-left-color:var(--pink);transition-delay:0.05s;padding:6px 10px">
+          <span class="name" style="color:var(--pink);min-width:140px;font-size:0.75rem">SIG_TREE_Init</span>
+          <span class="detail mono" style="font-size:0.65rem">0x104c05a0</span>
         </div>
-        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.08s;padding:7px 12px">
-          <span class="name" style="color:var(--cyan);min-width:150px;font-size:0.8rem">sigtree_eval_entry</span>
-          <span class="detail mono" style="font-size:0.7rem">0x1073fe90 (83 bytes)</span>
+        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.07s;padding:6px 10px">
+          <span class="name" style="color:var(--cyan);min-width:140px;font-size:0.75rem">NodeExpansion</span>
+          <span class="detail mono" style="font-size:0.65rem">0x104bd759 &mdash; 16B VDM &rarr; 36B</span>
         </div>
-        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.11s;padding:7px 12px">
-          <span class="name" style="color:var(--green);min-width:150px;font-size:0.8rem">tree_data_loader</span>
-          <span class="detail mono" style="font-size:0.7rem">0x1012b02a (~100 bytes)</span>
+        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.09s;padding:6px 10px">
+          <span class="name" style="color:var(--green);min-width:140px;font-size:0.75rem">Finalization</span>
+          <span class="detail mono" style="font-size:0.65rem">0x104bdc13 &mdash; sort + group</span>
         </div>
-        <div class="engine-bar" style="border-left-color:var(--purple);transition-delay:0.14s;padding:7px 12px">
-          <span class="name" style="color:var(--purple);min-width:150px;font-size:0.8rem">node_to_lua_table</span>
-          <span class="detail mono" style="font-size:0.7rem">0x100f208d (192 bytes)</span>
+        <div class="engine-bar" style="border-left-color:var(--purple);transition-delay:0.11s;padding:6px 10px">
+          <span class="name" style="color:var(--purple);min-width:140px;font-size:0.75rem">NodeDispatcher</span>
+          <span class="detail mono" style="font-size:0.65rem">0x1007ccdd &mdash; marker 0x30</span>
         </div>
-        <div class="engine-bar" style="border-left-color:var(--orange);transition-delay:0.17s;padding:7px 12px">
-          <span class="name" style="color:var(--orange);min-width:150px;font-size:0.8rem">jit_emitter</span>
-          <span class="detail mono" style="font-size:0.7rem">0x100f226f (216 bytes)</span>
+        <div class="engine-bar" style="border-left-color:var(--orange);transition-delay:0.13s;padding:6px 10px">
+          <span class="name" style="color:var(--orange);min-width:140px;font-size:0.75rem">SlotComparison</span>
+          <span class="detail mono" style="font-size:0.65rem">0x1007ced5 &mdash; weighted score</span>
         </div>
-        <div class="engine-bar" style="border-left-color:var(--red);transition-delay:0.2s;padding:7px 12px">
-          <span class="name" style="color:var(--red);min-width:150px;font-size:0.8rem">xor_node_eval</span>
-          <span class="detail mono" style="font-size:0.7rem">0x100f2354 (94 bytes)</span>
+        <div class="engine-bar" style="border-left-color:var(--red);transition-delay:0.15s;padding:6px 10px">
+          <span class="name" style="color:var(--red);min-width:140px;font-size:0.75rem">DetectionArbitrator</span>
+          <span class="detail mono" style="font-size:0.65rem">0x1018d68b &mdash; L1 &gt; L2</span>
         </div>
-        <div class="engine-bar" style="border-left-color:var(--yellow);transition-delay:0.23s;padding:7px 12px">
-          <span class="name" style="color:var(--yellow);min-width:150px;font-size:0.8rem">sigattr_lua_register</span>
-          <span class="detail mono" style="font-size:0.7rem">0x10086bbe (385 bytes)</span>
+        <div class="engine-bar" style="border-left-color:var(--yellow);transition-delay:0.17s;padding:6px 10px">
+          <span class="name" style="color:var(--yellow);min-width:140px;font-size:0.75rem">jit_emitter</span>
+          <span class="detail mono" style="font-size:0.65rem">0x100f226f (216 bytes)</span>
         </div>
       </div>
     </div>
     <div>
-      <h3 style="color:var(--yellow)">Data Strings</h3>
-      <div class="code-block" style="font-size:0.68rem"><span class="str">"sigtree"</span>            @ <span class="num">0x109c80b0</span>
-<span class="str">"sigtree log is not valid"</span>
-                       @ <span class="num">0x10b52130</span>
-<span class="str">"Invalid sigattr_head index"</span>
-                       @ <span class="num">0x10b5214c</span>
-<span class="str">"sigattr_head"</span>       @ <span class="num">0x1097d710</span>
-<span class="str">"sigattr_tail"</span>       @ <span class="num">0x1097d720</span>
-<span class="str">"this_sigattrlog"</span>    @ <span class="num">0x1097d74c</span></div>
+      <h3 style="color:var(--yellow)">VDM Statistics</h3>
+      <div class="stat-grid stat-grid-3" style="gap:8px">
+        <div class="stat-card" style="transition-delay:0.1s;padding:10px"><span class="num glow-pink" style="font-size:1.1rem" data-count="408708">0</span><span class="label">Total Nodes</span></div>
+        <div class="stat-card" style="transition-delay:0.13s;padding:10px"><span class="num glow-cyan" style="font-size:1.1rem" data-count="66163">0</span><span class="label">Inline Strings</span></div>
+        <div class="stat-card" style="transition-delay:0.16s;padding:10px"><span class="num glow-green" style="font-size:1.1rem" data-count="26165">0</span><span class="label">Unique Weights</span></div>
+      </div>
       <h3 class="mt-2" style="color:var(--yellow)">Object Offsets</h3>
-      <div class="code-block" style="font-size:0.68rem"><span class="fn">+0x2240</span>  Tree data pointer
+      <div class="code-block" style="font-size:0.65rem"><span class="fn">+0x2240</span>  Tree data pointer
 <span class="fn">+0x32c</span>   Active tree vector
-<span class="fn">+0x330</span>   Alternate tree vector
 <span class="fn">+0x37d4</span>  JIT buffer base pointer
 <span class="fn">+0x37dc</span>  JIT buffer write offset
-<span class="fn">+0x30</span>    SigAttr flags (bit 2)
-<span class="fn">+0x44</span>    Log data arrays pointer
 <span class="fn">+0x82ee4</span> Sigattr events array
 <span class="fn">+0x836e4</span> Sigattr event count</div>
     </div>
@@ -525,15 +579,15 @@ write_ptr = base + offset
 </div>
 </div>
 
-<!-- SLIDE 11: Summary -->
-<div class="slide" data-slide="11">
+<!-- SLIDE 12: Summary -->
+<div class="slide" data-slide="12">
 <div class="slide-inner center-col" style="justify-content:center;gap:20px">
   <h2 class="glow-pink mb-1">SigTree ML: Summary</h2>
   <div class="stat-grid stat-grid-4" style="width:100%;max-width:1200px">
-    <div class="stat-card" style="transition-delay:0.05s"><span class="num glow-pink" data-count="33428">0</span><span class="label">Decision Trees Total</span></div>
-    <div class="stat-card" style="transition-delay:0.1s"><span class="num glow-cyan" data-count="14926">0</span><span class="label">SIG_TREE (0x40)</span></div>
-    <div class="stat-card" style="transition-delay:0.15s"><span class="num glow-purple" data-count="3771">0</span><span class="label">SIG_TREE_EXT (0x41)</span></div>
-    <div class="stat-card" style="transition-delay:0.2s"><span class="num glow-orange" data-count="14731">0</span><span class="label">SIG_TREE_BM (0xB3)</span></div>
+    <div class="stat-card" style="transition-delay:0.05s"><span class="num glow-pink" data-count="33428">0</span><span class="label">Decision Trees</span></div>
+    <div class="stat-card" style="transition-delay:0.1s"><span class="num glow-cyan" data-count="408708">0</span><span class="label">Total Nodes</span></div>
+    <div class="stat-card" style="transition-delay:0.15s"><span class="num glow-green" data-count="66163">0</span><span class="label">Inline Strings</span></div>
+    <div class="stat-card" style="transition-delay:0.2s"><span class="num glow-orange" data-count="26165">0</span><span class="label">Unique Weights</span></div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;width:100%;max-width:1000px">
     <div class="stat-card" style="transition-delay:0.25s;text-align:left;padding:16px">

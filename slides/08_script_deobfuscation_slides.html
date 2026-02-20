@@ -95,7 +95,7 @@ code,.code{font-family:var(--mono);font-size:0.9em}
   <div class="stat-grid stat-grid-4" style="width:100%;max-width:1400px">
     <div class="stat-card" style="transition-delay:0.1s;border-top:3px solid var(--cyan)">
       <span class="num glow-cyan" style="font-size:1.5rem">PowerShell</span>
-      <span class="label" style="margin-top:8px">22,856 lines of transforms</span>
+      <span class="label" style="margin-top:8px">394 transforms &bull; 22,856 lines</span>
       <div class="code-block mt-1" style="font-size:0.65rem;padding:8px;text-align:left"><span class="str">"PowerShell_"</span> @ <span class="num">0x109C6794</span>
 <span class="str">"NScript:ForceTypePS"</span>
   @ <span class="num">0x10A7813C</span>
@@ -104,7 +104,7 @@ code,.code{font-family:var(--mono);font-size:0.9em}
     </div>
     <div class="stat-card" style="transition-delay:0.2s;border-top:3px solid var(--green)">
       <span class="num glow-green" style="font-size:1.5rem">JScript</span>
-      <span class="label" style="margin-top:8px">20,671 lines of transforms</span>
+      <span class="label" style="margin-top:8px">359 transforms &bull; 20,671 lines</span>
       <div class="code-block mt-1" style="font-size:0.65rem;padding:8px;text-align:left"><span class="str">"JScript"</span> @ <span class="num">0x109C6760</span>
 <span class="str">"NScript:ForceTypeJS"</span>
   @ <span class="num">0x10A781F8</span>
@@ -113,14 +113,14 @@ code,.code{font-family:var(--mono);font-size:0.9em}
     </div>
     <div class="stat-card" style="transition-delay:0.3s;border-top:3px solid var(--purple)">
       <span class="num glow-purple" style="font-size:1.5rem">VBScript</span>
-      <span class="label" style="margin-top:8px">17,869 lines of transforms</span>
+      <span class="label" style="margin-top:8px">340 transforms &bull; 17,869 lines</span>
       <div class="code-block mt-1" style="font-size:0.65rem;padding:8px;text-align:left"><span class="str">"VBScript"</span> @ <span class="num">0x109C6778</span>
 <span class="str">"NScript:ForceTypeVBS"</span>
   @ <span class="num">0x10A781C8</span></div>
     </div>
     <div class="stat-card" style="transition-delay:0.4s;border-top:3px solid var(--orange)">
       <span class="num glow-orange" style="font-size:1.5rem">Batch</span>
-      <span class="label" style="margin-top:8px">13,908 lines of transforms</span>
+      <span class="label" style="margin-top:8px">265 transforms &bull; 13,908 lines</span>
       <div class="code-block mt-1" style="font-size:0.65rem;padding:8px;text-align:left"><span class="str">"NScript:ForceTypeBAT"</span>
   @ <span class="num">0x10A78168</span>
 <span class="cmt">// + Python support:</span>
@@ -566,8 +566,21 @@ code,.code{font-family:var(--mono);font-size:0.9em}
     <div class="stat-card" style="transition-delay:0.35s"><span class="num glow-purple">20+</span><span class="label">JS Features</span></div>
     <div class="stat-card" style="transition-delay:0.4s"><span class="num glow-orange">6</span><span class="label">Language Types</span></div>
   </div>
-  <p class="mt-3 desc" style="max-width:800px">NScript is the deobfuscation backbone of Defender, systematically unwinding even deeply nested script obfuscation through fixed-point iteration. Each intermediate layer is scanned, and the normalized output feeds into BRUTE matching and Lua evaluation.</p>
-  <p class="mono mt-2" style="font-size:0.75rem;color:var(--fg3)">NScript:ForceTypePS @ 0x10A7813C &bull; 1,358 transforms &bull; 75,304 lines of logic &bull; mpengine.dll</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:1200px;margin-top:16px">
+    <div class="stat-card" style="transition-delay:0.45s;text-align:left;padding:14px;border-left:3px solid var(--red)">
+      <span class="label" style="color:var(--red);font-weight:700">Dynamic Deobfuscation</span>
+      <span style="display:block;font-size:0.72rem;color:var(--fg2);margin-top:4px">pwsh + node interpreters with 30-second timeouts for execution-based deobfuscation</span>
+    </div>
+    <div class="stat-card" style="transition-delay:0.5s;text-align:left;padding:14px;border-left:3px solid var(--yellow)">
+      <span class="label" style="color:var(--yellow);font-weight:700">Crypto Support</span>
+      <span style="display:block;font-size:0.72rem;color:var(--fg2);margin-top:4px">AES-128/256-CBC with PKCS7 padding for encrypted payload deobfuscation</span>
+    </div>
+    <div class="stat-card" style="transition-delay:0.55s;text-align:left;padding:14px;border-left:3px solid var(--fg3)">
+      <span class="label" style="color:var(--fg2);font-weight:700">Size Gate: 1 MB</span>
+      <span style="display:block;font-size:0.72rem;color:var(--fg2);margin-top:4px">Scripts &gt; 1MB skip deobfuscation. MpMaxScriptParseLength configurable via DBVAR</span>
+    </div>
+  </div>
+  <p class="mono mt-2" style="font-size:0.75rem;color:var(--fg3)">PS:394 + VBS:340 + JS:359 + Batch:265 = 1,358 transforms &bull; 75,304 lines &bull; mpengine.dll</p>
 </div>
 </div>
 

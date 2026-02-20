@@ -521,6 +521,34 @@ Registry paths for configuration:
 - `SOFTWARE\Microsoft\Microsoft Antimalware\Spynet` @ `0x109C6CC8`
 - `Software\Microsoft\MpScan\Spynet` @ `0x109C4C98`
 
+### Cloud Block Levels
+
+The cloud block level controls detection aggressiveness:
+
+| Level | Value | Behavior |
+|-------|-------|----------|
+| Off | 0 | MAPS Off (`MAPSOff`) — no cloud queries |
+| Default | 0 | Default blocking |
+| Moderate | 1 | Moderate blocking |
+| High | 2 | High blocking |
+| High+ | 4 | High+ — additional protection measures |
+| Zero Tolerance | 6 | Block all unknown executables |
+
+- Registry: `MpCloudBlockLevel` / `cloudblocklevel`
+- Kill switches: `SpynetKillSwitches`, `SpynetBondKillbit`, `SpynetBondResponseKillbit`
+
+### Sample Submission Consent
+
+| Setting | Behavior |
+|---------|----------|
+| Send safe samples automatically (default) | Auto-submits `.bat`, `.scr`, `.dll`, `.exe` |
+| Send all samples automatically | Auto-submits all file types |
+| Always Prompt | Asks user before uploading |
+| Do not send | Never uploads samples |
+
+- Registry: `SubmitSamplesConsent`
+- Samples uploaded to regional Azure blob endpoints
+
 ### Configuration Parameters
 
 | Parameter | Address | Purpose |
@@ -529,6 +557,10 @@ Registry paths for configuration:
 | `MpDisableSyncSpynetCheck` | `0x10A0875C` | Disable synchronous check |
 | `MpDisableOplocksInSpynet` | `0x10A3454C` | Disable file oplocks during report |
 | `fastpathcachesize` | `0x109F2A34` | FASTPATH response cache size |
+| `MpMapsNumThreads` | — | Thread pool for MAPS queries |
+| `MpMapsNumThreadsDss` | — | DSS-specific thread pool |
+| `MpAsyncDssQueryTimeout` | — | Async query timeout |
+| `MpSyncDssQueryTimeout` | — | Sync lowfi query timeout |
 
 ---
 
@@ -670,6 +702,102 @@ Strings related to detection management during MAPS processing:
 
 ---
 
+## Additional Report Types
+
+Beyond lowfi reports, the MAPS protocol supports several other report types:
+
+### Heartbeat Reports
+
+Periodic health check reports sent at configurable intervals:
+- `Engine.Maps.Heartbeat` event
+- Source: `SCANSOURCE_HEARTBEAT`
+- Configurable: `MpMapsHeartbeatRate`, `MpMapsHeartbeatDelay`, `MpMapsHeartbeatDetectionInterval`
+- Heartbeat variants: Setup, Mpsigstub, Test, Uninstall, DefenderDisable, MapsDisable, Error, Exclusions, RtpChange, Enhanced, OfflineEnhanced, PaidEnhanced
+- Each variant has a killswitch (`SpynetKillSwitches`)
+
+### URL Reputation Queries
+
+- Class: `UrlReputationMaps` (RTTI: `.?AVUrlReputationMaps@@`)
+- Traces: `Engine.Maps.UrlRepParseFailure`, `Engine.Maps.UrlRepTimeout`, `Engine.Maps.UrlRepSendLatency`
+- Config: `MpDisableUrlReputationMaps`, `MpDisableUrlReputationMapsCache`
+
+### WDO (Windows Defender Offline) Reports
+
+- Trace: `Engine.Maps.SendWdoReport`
+- Throttled: `MpMapsWdoDetectionThrottlingInterval`
+
+### Sync vs Async Lowfi
+
+- **Async lowfi** (`TYPE_ASYNC_LOWFI`): Non-blocking — scan continues while report uploads
+- **Sync lowfi** (`TYPE_SYNC_LOWFI`): Blocking — waits for cloud verdict before returning result, timeout configurable via `MpSyncDssQueryTimeout`
+- **Telemetry-only**: No action taken — data collection only (`telemetryonly=1`)
+
+---
+
+## Certificate Pinning
+
+The MAPS TLS connection uses certificate pinning for security:
+
+| Parameter | Description |
+|-----------|-------------|
+| `MpPublicRootThumbs` | SHA-1 thumbprints of trusted root CA certificates |
+| `MpPublicDisallowedThumbs` | Denylist of rejected certificate thumbprints |
+| `MpPublicKeys` | SHA-256 of SPKI public key hashes |
+
+### SSLOptions Registry Configuration
+
+Registry: `HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet\SSLOptions` (DWORD)
+
+| Value | Meaning |
+|-------|---------|
+| 0 | Disable pinning AND revocation checks |
+| 1 | Disable pinning only |
+| 2 | Disable revocation checks only |
+| 3 | Enable both (default) |
+
+CRL infrastructure uses AME root CAs:
+- `http://crl.microsoft.com/pkiinfra/crl/ameroot.crl`
+- Backup CRLs: `crl1.ame.gbl`, `crl2.ame.gbl`, `crl3.ame.gbl`
+
+---
+
+## SpynetReport Metadata Fields
+
+The SpynetReport includes multiple hash types and metadata:
+
+### File Hash Fields
+
+| Hash | Description |
+|------|-------------|
+| `Sha256` | Full file SHA-256 |
+| `Sha1` | Full file SHA-1 |
+| `ClusterHash` | MpInternal cluster hash |
+| `Crc16` | 16-bit CRC |
+| `Ctph` | Context-triggered piecewise hash (fuzzy hash) |
+| `ImpHash` | Import hash (PE import table) |
+| `Lshash` | Locality-sensitive hash |
+| `PartialCrc1/2/3` | Partial CRC values (section-based) |
+| `AuthentiCodeHash` | Authenticode hash |
+
+### STREAM_ATTRIBUTE Types (selected)
+
+72 STREAM_ATTRIBUTE types control report content, including 8 AMSI-specific:
+
+| Attribute | Description |
+|-----------|-------------|
+| `STREAM_ATTRIBUTE_URL` | URL being scanned |
+| `STREAM_ATTRIBUTE_THREAT_ID` | Matched threat ID |
+| `STREAM_ATTRIBUTE_LOFI` | Lowfi detection data |
+| `STREAM_ATTRIBUTE_SCANREASON` | Reason for the scan |
+| `STREAM_ATTRIBUTE_HAS_MOTW_ADS` | Mark-of-the-Web alternate data stream |
+| `STREAM_ATTRIBUTE_TRUST_LEVEL` | Trust level |
+| `STREAM_ATTRIBUTE_AMSI_SESSION_ID` | AMSI session ID |
+| `STREAM_ATTRIBUTE_AMSI_APP_ID` | AMSI app ID |
+| `STREAM_ATTRIBUTE_AMSI_CONTENT_NAME` | AMSI content name |
+| `STREAM_ATTRIBUTE_AMSI_REDIRECT_CHAIN` | AMSI redirect chain |
+
+---
+
 ## Cross-References
 
 - **Stage 3-11 (All Prior Stages)** — Lowfi detections from any stage can trigger MAPS lookup
@@ -685,9 +813,14 @@ Strings related to detection management during MAPS processing:
 | Metric | Value |
 |--------|-------|
 | Production endpoint | `fastpath.wdcp.microsoft.com` @ `0x10A09EC0` |
+| PPE endpoint | `fastpath.wdcpppe.microsoft.com` @ `0x10A09EF8` |
 | Serialization format | Bond CompactBinaryV1 @ `0x10C823C4` |
 | FASTPATH sig types | 4 (SDN, SDN_EX, TDN, DATA) |
+| Report types | 7 (Async Lowfi, Sync Lowfi, Telemetry, Sample, Heartbeat, URL Rep, WDO) |
 | Latency telemetry fields | 20+ |
-| Bond RTTI classes | 13+ |
+| Bond RTTI classes | 100+ entity types |
+| STREAM_ATTRIBUTE types | 72 (8 AMSI-specific) |
 | SpyNet report strings | 17+ |
-| Configuration parameters | 6+ |
+| Cloud block levels | 5 (Off, Moderate, High, High+, Zero Tolerance) |
+| Configuration parameters | 15+ |
+| Certificate pinning | SHA-1 root thumbs + SHA-256 SPKI pins |

@@ -81,7 +81,7 @@ code,.code{font-family:var(--mono);font-size:0.9em}
     <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-purple" data-count="198">0</span><span class="label">WinAPI Handlers</span></div>
     <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-cyan" data-count="973">0</span><span class="label">Virtual DLLs</span></div>
     <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-green">67</span><span class="label">FPU Exports</span></div>
-    <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-orange">500K</span><span class="label">Instruction Limit</span></div>
+    <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-orange">5M</span><span class="label">Instruction Budget</span></div>
   </div>
   <p class="mono mt-3" style="font-size:0.75rem;color:var(--fg3)">RTTI: .?AVx86_IL_emulator@@ @ 0x10C748CC &mdash; .?AVIL_emulator@@ @ 0x10C74B6C</p>
 </div>
@@ -303,49 +303,48 @@ code,.code{font-family:var(--mono);font-size:0.9em}
 <div class="slide" data-slide="6">
 <div class="slide-inner">
   <h2 class="glow-cyan mb-1">Execution Engine</h2>
-  <p class="desc mb-2">Fetch-decode-execute loop with 500,000 instruction hard limit</p>
+  <p class="desc mb-2">Fetch-decode-execute loop with 5M instruction budget in ~1,000 instruction batches</p>
   <div class="split-60-40">
     <div>
       <div class="code-block" style="font-size:0.75rem"><span class="kw">fn</span> <span class="fn">emulate_main_loop</span>(ctx: &amp;<span class="kw">mut</span> EmuContext) {
     <span class="kw">let mut</span> insn_count: <span class="kw">u32</span> = <span class="num">0</span>;
+    <span class="kw">let</span> max_insns = <span class="num">5_000_000</span>;  <span class="cmt">// DBVAR</span>
+    <span class="kw">let</span> batch = <span class="num">1_000</span>;
 
     <span class="kw">loop</span> {
-        <span class="kw">let</span> eip = ctx.regs.eip;
+        <span class="cmt">// Execute batch of ~1,000 instructions</span>
+        <span class="fn">execute_batch</span>(ctx, batch);
+        insn_count += batch;
 
         <span class="cmt">// Stop sentinel check</span>
-        <span class="kw">if</span> eip == <span class="num">0xDEADBEEF</span> { <span class="kw">break</span>; }
+        <span class="kw">if</span> ctx.regs.eip == <span class="num">0xDEADBEEF</span> {
+            <span class="kw">break</span>;
+        }
 
-        <span class="cmt">// Decode instruction</span>
-        <span class="kw">let</span> insn = <span class="fn">decode</span>(ctx.memory, eip);
-
-        <span class="cmt">// Instruction limit</span>
-        insn_count += <span class="num">1</span>;
-        <span class="kw">if</span> insn_count >= <span class="num">500_000</span> {
+        <span class="cmt">// Budget exhausted</span>
+        <span class="kw">if</span> insn_count >= max_insns {
             <span class="cmt">// "abort: execution limit met"</span>
             <span class="cmt">//     @ 0x109334D8</span>
             <span class="kw">break</span>;
         }
 
+        <span class="cmt">// API trampoline dispatch</span>
+        <span class="kw">if</span> ctx.regs.eip >= <span class="num">0x7FFE0000</span> {
+            <span class="fn">handle_api_call</span>(ctx);
+        }
+
         <span class="cmt">// FPU routing</span>
-        <span class="kw">if</span> insn.type == <span class="str">DASM_OPTYPE_FPU_RM</span> {
-            <span class="cmt">// @ 0x109815DC</span>
-            <span class="fn">execute_fpu</span>(ctx, &amp;insn);
+        <span class="kw">if</span> ctx.optype == <span class="str">FPU_RM</span> {
+            <span class="fn">execute_fpu</span>(ctx);
         }
-
-        <span class="cmt">// API trampoline check</span>
-        <span class="kw">if</span> eip >= <span class="num">0x7FFE0000</span> {
-            <span class="fn">handle_api_call</span>(ctx, eip);
-        }
-
-        ctx.regs.eip = insn.next_eip;
     }
 }</div>
     </div>
     <div>
       <h3 style="color:var(--cyan)">Execution Limits</h3>
       <div class="stat-card" style="transition-delay:0.1s;border:1px solid rgba(0,229,255,0.3)">
-        <span class="num glow-cyan">500K</span>
-        <span class="label">Max instructions per run</span>
+        <span class="num glow-cyan">5M</span>
+        <span class="label">Instruction Budget</span>
       </div>
       <div class="code-block mt-2" style="font-size:0.7rem"><span class="str">"abort: execution limit met (%u instructions)"</span>
     @ <span class="num">0x109334D8</span>
@@ -420,7 +419,7 @@ code,.code{font-family:var(--mono);font-size:0.9em}
 <div class="slide" data-slide="8">
 <div class="slide-inner">
   <h2 class="glow-cyan mb-1">Virtual DLL System</h2>
-  <p class="desc mb-2">973 VDLLs mapped at 0x70000000+ provide realistic API stubs for import resolution</p>
+  <p class="desc mb-2">973 VDLLs (750 x86 + 195 x64 + 18 ARM + 10 MSIL) mapped at 0x70000000+ provide realistic API stubs</p>
   <div class="split">
     <div>
       <h3 style="color:var(--cyan)">Import Resolution Flow</h3>
@@ -513,8 +512,66 @@ code,.code{font-family:var(--mono);font-size:0.9em}
 </div>
 </div>
 
-<!-- SLIDE 10: VFS Dropped Files -->
+<!-- SLIDE 10: Exception Handling & TEB/PEB -->
 <div class="slide" data-slide="10">
+<div class="slide-inner">
+  <h2 class="glow-red mb-1">Exception Handling &amp; Process Environment</h2>
+  <p class="desc mb-2">Full SEH/VEH/x64 exception dispatch plus realistic TEB/PEB environment to defeat sandbox detection</p>
+  <div class="split">
+    <div>
+      <h3 style="color:var(--red)">Exception Handling (3 modes)</h3>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="engine-bar" style="border-left-color:var(--red);transition-delay:0.1s">
+          <span class="name" style="color:var(--red);font-size:0.8rem">VEH</span>
+          <span class="detail">Vectored Exception Handlers checked first (AddVectoredExceptionHandler)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--orange);transition-delay:0.15s">
+          <span class="name" style="color:var(--orange);font-size:0.8rem">SEH (x86)</span>
+          <span class="detail">Walk chain from TEB[0x00] (FS:[0]). Up to 32 frames. Return sentinel 0xDEADC0DE</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--purple);transition-delay:0.2s">
+          <span class="name" style="color:var(--purple);font-size:0.8rem">x64 Table</span>
+          <span class="detail">RUNTIME_FUNCTION binary search + UNWIND_INFO with UNW_FLAG_EHANDLER</span>
+        </div>
+      </div>
+      <h3 class="mt-2" style="color:var(--red)">CryptAPI &amp; BCrypt</h3>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.25s">
+          <span class="name" style="color:var(--cyan);font-size:0.8rem">CryptAPI</span>
+          <span class="detail">AcquireContext, CreateHash, DeriveKey, Decrypt/Encrypt (RC4, AES-CBC/ECB)</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--cyan);transition-delay:0.3s">
+          <span class="name" style="color:var(--cyan);font-size:0.8rem">BCrypt</span>
+          <span class="detail">OpenAlgorithmProvider, GenerateSymmetricKey (AES, RC4, SHA-256)</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 style="color:var(--green)">TEB/PEB Fake Environment</h3>
+      <div class="code-block" style="font-size:0.68rem"><span class="cmt">// Defeats sandbox detection:</span>
+<span class="fn">PEB.BeingDebugged</span>   = <span class="num">0</span>
+<span class="fn">PEB.NtGlobalFlag</span>    = <span class="num">0</span>
+<span class="fn">PEB.ImageBaseAddress</span> = loaded PE base
+<span class="fn">PEB.Ldr</span>             = PEB_LDR_DATA
+
+<span class="cmt">// Fake process parameters:</span>
+<span class="str">ComputerName</span>:  <span class="str">HAL9TH</span>
+<span class="str">UserName</span>:      <span class="str">JohnDoe</span>
+<span class="str">ImagePath</span>:     <span class="str">C:\Users\JohnDoe\
+                Desktop\target.exe</span>
+<span class="str">CurrentDir</span>:    <span class="str">C:\Windows\System32\</span>
+<span class="str">SystemRoot</span>:    <span class="str">C:\Windows</span></div>
+      <div class="stat-card mt-2" style="transition-delay:0.35s;border:1px solid rgba(57,255,20,0.3)">
+        <span class="num" style="font-size:0.85rem;color:var(--green)">3 Module Lists</span>
+        <span class="label">InLoadOrder, InMemoryOrder, InInitializationOrder — populated with target PE + VDLLs</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SLIDE 11: VFS Dropped Files -->
+<div class="slide" data-slide="11">
 <div class="slide-inner">
   <h2 class="glow-green mb-1">VFS: Virtual File System</h2>
   <p class="desc mb-2">Files written by emulated code are captured and scanned in Stage 6</p>
@@ -558,15 +615,15 @@ code,.code{font-family:var(--mono);font-size:0.9em}
 </div>
 </div>
 
-<!-- SLIDE 11: Summary -->
-<div class="slide" data-slide="11">
+<!-- SLIDE 12: Summary -->
+<div class="slide" data-slide="12">
 <div class="slide-inner center-col" style="justify-content:center">
   <h2 class="glow-purple mb-2">Stage 5 Summary</h2>
   <div class="stat-grid stat-grid-4" style="width:100%;max-width:1200px">
     <div class="stat-card" style="transition-delay:0.05s"><span class="num glow-purple" data-count="198">0</span><span class="label">WinAPI Handlers</span></div>
     <div class="stat-card" style="transition-delay:0.1s"><span class="num glow-cyan" data-count="973">0</span><span class="label">Virtual DLLs</span></div>
     <div class="stat-card" style="transition-delay:0.15s"><span class="num glow-green">67</span><span class="label">FPU Exports</span></div>
-    <div class="stat-card" style="transition-delay:0.2s"><span class="num glow-orange">500K</span><span class="label">Instruction Limit</span></div>
+    <div class="stat-card" style="transition-delay:0.2s"><span class="num glow-orange">5M</span><span class="label">Instruction Budget</span></div>
     <div class="stat-card" style="transition-delay:0.25s"><span class="num glow-yellow" data-count="4601">0</span><span class="label">FOP Rules</span></div>
     <div class="stat-card" style="transition-delay:0.3s"><span class="num glow-cyan">3</span><span class="label">CPU Architectures</span></div>
     <div class="stat-card" style="transition-delay:0.35s"><span class="num glow-green" data-count="302">0</span><span class="label">PE Attributes</span></div>

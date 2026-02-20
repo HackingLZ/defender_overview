@@ -7,9 +7,9 @@
 
 ## Overview
 
-Stage 5 is the PE emulation engine -- a full CPU emulator embedded within mpengine.dll that executes PE files in a sandboxed virtual environment. The emulator interprets x86, x64, and ARM instructions, provides 198 emulated Windows API handlers, loads 973 virtual DLLs (VDLLs) into a synthetic address space, and records behavioral telemetry (FOP opcode traces and API call logs) for signature matching.
+Stage 5 is the PE emulation engine -- a full CPU emulator embedded within mpengine.dll that executes PE files in a sandboxed virtual environment. The emulator interprets x86, x64, and ARM instructions, provides 198 emulated Windows API handlers (including CryptAPI and BCrypt), loads 973 virtual DLLs (VDLLs) into a synthetic address space, and records behavioral telemetry (FOP opcode traces and API call logs) for signature matching. The emulator runs with a default budget of **5 million instructions** (configurable), processing in batches of ~1,000.
 
-The emulator's primary purpose is **dynamic unpacking**: many malware samples encrypt or compress their payloads and only reveal the real code at runtime. By emulating execution, Defender can observe the decrypted payload and scan it through the full pipeline recursively (Stage 6).
+The emulator's primary purpose is **dynamic unpacking**: many malware samples encrypt or compress their payloads and only reveal the real code at runtime. By emulating execution, Defender can observe the decrypted payload and scan it through the full pipeline recursively (Stage 6). Full exception handling support (VEH, SEH chain walking, x64 table-driven RUNTIME_FUNCTION dispatch) ensures packed malware that uses SEH-based control flow transfer is handled correctly.
 
 ### Key RTTI Classes from the Binary
 
@@ -234,68 +234,197 @@ Emulated code continues at return address
 
 ### Instruction Processing Loop
 
-The core emulation loop fetches, decodes, and executes one instruction at a time:
+The core emulation loop processes instructions in batches of approximately 1,000, checking
+control conditions between each batch:
 
 ```
 Pseudocode:
 ─────────────────────────────────────────────────────────────────────────
 
-fn emulate_main_loop(ctx: &mut EmuContext) -> ScanResult {
-    let mut insn_count: u32 = 0;
-    let max_instructions: u32 = 500_000;   // Hard limit
+emulate_main_loop(ctx):
+    insn_count = 0
+    max_instructions = 5,000,000    // Default budget (configurable via DBVAR)
+    batch_size = 1,000
 
-    loop {
-        // Fetch instruction at current EIP
-        let eip = ctx.regs.eip;
+    loop:
+        // Execute a batch of instructions
+        execute_batch(ctx, batch_size)
+        insn_count += batch_size
 
         // Check stop sentinel
-        if eip == 0xDEADBEEF {
-            break;  // Normal termination
-        }
+        if EIP == 0xDEADBEEF:
+            break  // Normal termination (return address sentinel)
 
-        // Decode instruction
-        let insn = decode_instruction(ctx.memory, eip);
-
-        // Check instruction limit
-        insn_count += 1;
-        if insn_count >= max_instructions {
+        // Check instruction budget
+        if insn_count >= max_instructions:
             // "abort: execution limit met (%u instructions)"
             //     @ 0x109334D8
-            break;
-        }
+            break
 
-        // Execute instruction
-        match insn.opcode_type {
-            DASM_OPTYPE_FPU_RM => {
-                // Route to FPU_* export function
-                // String: "DASM_OPTYPE_FPU_RM" @ 0x109815DC
-                execute_fpu_instruction(ctx, &insn);
-            }
-            _ => execute_general_instruction(ctx, &insn),
-        }
+        // Check for API trampoline hit (0F FF F0 opcode at current IP)
+        if [EIP] == 0x0F 0xFF 0xF0:
+            api_id = EAX
+            dispatch_api_handler(ctx, api_id)
 
-        // Check for API trampoline hit
-        if eip >= 0x7FFE0000 && eip < 0x7FFF0000 {
-            let api_index = (eip - 0x7FFE0000) / TRAMPOLINE_STRIDE;
-            handle_api_call(ctx, api_index);
-        }
+        // Check for direct syscall (0F 05 = SYSCALL, 0F 34 = SYSENTER)
+        if [EIP] == 0x0F 0x05 or [EIP] == 0x0F 0x34:
+            dispatch_syscall(ctx, EAX)
 
-        // Update EIP
-        ctx.regs.eip = insn.next_eip;
-    }
+        // Self-modifying code: flush translation cache if code regions were written
+        if code_region_written:
+            flush_translation_cache()
 
-    return ctx.scan_result;
-}
+        // FPU instruction: route to exported FPU_* handler
+        if opcode_type == DASM_OPTYPE_FPU_RM:
+            // "DASM_OPTYPE_FPU_RM" @ 0x109815DC
+            execute_fpu_instruction(ctx, insn)
 ```
 
 ### Execution Limits
 
 | Limit | Value | String/Source |
 |-------|-------|---------------|
-| Max instructions per run | 500,000 | `"abort: execution limit met (%u instructions)"` @ `0x109334D8` |
-| Infinite loop detection | configurable | `"Infinite loop detected (more that %d instructions executed)"` @ `0x10983320` |
+| Max instructions per run | 5,000,000 | `"abort: execution limit met (%u instructions)"` @ `0x109334D8` |
+| Instruction batch size | ~1,000 | Between-batch control checks |
+| Fopclog max entries | 8,192 | First-opcode-byte recording cap |
+| Max SEH dispatches | 64 | Prevents infinite exception loops |
+| TLS callback budget | 50,000 per callback | Budget before main entry point |
+| DllMain budget | 10,000 per VDLL | Budget for VDLL initialization |
+| Tight loop detection | 50,000 insns without API call | Anti-analysis delay loop detection |
+| Consecutive error limit | 3 | Unhandled exception termination |
 
-*(from RE of mpengine.dll -- execution limit strings)*
+*(from RE of mpengine.dll -- execution limit strings and emulator control flow)*
+
+---
+
+## Exception Handling
+
+The emulator supports three exception handling mechanisms, checked in priority order:
+
+### VEH (Vectored Exception Handlers)
+
+VEH handlers registered via `AddVectoredExceptionHandler` are checked **before** the SEH chain
+on x86. Dispatch builds `EXCEPTION_POINTERS { ExceptionRecord*, ContextRecord* }` on the emulated
+stack and calls the handler. Return value `0xFFFFFFFF` (`EXCEPTION_CONTINUE_EXECUTION`) resumes
+execution; `0` (`EXCEPTION_CONTINUE_SEARCH`) tries the next handler.
+
+### SEH (x86 Structured Exception Handling)
+
+The SEH chain is walked from `TEB[0x00]` (FS:[0]). Up to 32 frames are walked. For each handler:
+1. Builds `EXCEPTION_RECORD` (80 bytes) and `CONTEXT` (716 bytes) on the emulated stack
+2. Calls handler with arguments: `(ExceptionRecord*, EstablisherFrame*, ContextRecord*, DispatcherContext*)`
+3. Sets return address to SEH return sentinel (`0xDEADC0DE`)
+4. Handler return value `0` = continue execution; `1` = continue search
+
+### x64 Table-Driven Exception Handling
+
+x64 uses `RUNTIME_FUNCTION` entries parsed from the PE's exception directory (data directory 3):
+1. Binary-searches the sorted `RUNTIME_FUNCTION` table for the faulting RIP
+2. Reads `UNWIND_INFO` at the entry's `UnwindInfoAddress`
+3. Checks for `UNW_FLAG_EHANDLER` (1) or `UNW_FLAG_UHANDLER` (2) flags
+4. Reads handler RVA from after the unwind codes array
+5. Sets up x64 fastcall call: RCX=ExceptionRecord*, RDX=EstablisherFrame, R8=ContextRecord*
+
+---
+
+## TEB/PEB Environment Setup
+
+The emulator constructs a realistic Windows process environment that defeats common sandbox
+detection techniques used by malware.
+
+### Segment Configuration
+
+- **x86**: FS segment base → TEB at `0x00020000`
+- **x64**: GS segment base → TEB at `0x00020000`
+
+### Process Parameters (Fake Environment)
+
+```
+Key TEB/PEB fields:
+  FS:[0x18] / GS:[0x30]  Self-pointer (TEB address)
+  FS:[0x30] / GS:[0x60]  PEB pointer
+  PEB.BeingDebugged       = 0 (anti-debug)
+  PEB.NtGlobalFlag        = 0 (anti-debug)
+  PEB.ImageBaseAddress     = loaded PE base
+  PEB.Ldr                  = PEB_LDR_DATA (module list)
+  PEB.ProcessParameters    = RTL_USER_PROCESS_PARAMETERS
+
+Process Parameters:
+  ComputerName:  HAL9TH          (not "DESKTOP-...", matches mpengine default)
+  UserName:      JohnDoe         (not "admin" or "malware")
+  ImagePath:     C:\Users\JohnDoe\Desktop\target.exe
+  CurrentDir:    C:\Windows\System32\
+  SystemRoot:    C:\Windows
+  TEMP:          C:\Windows\Temp
+```
+
+The PEB_LDR_DATA maintains three doubly-linked module lists (`InLoadOrderModuleList`,
+`InMemoryOrderModuleList`, `InInitializationOrderModuleList`) populated with the target PE
+and loaded VDLLs. Malware that walks these lists for DLL enumeration sees a realistic module chain.
+
+---
+
+## Cryptographic API Emulation
+
+### CryptAPI (ADVAPI32.DLL)
+
+The emulator tracks cryptographic state (hash objects, key objects) for operations including:
+- `CryptAcquireContext` / `CryptReleaseContext` -- provider management
+- `CryptCreateHash` / `CryptHashData` / `CryptGetHashParam` -- MD5, SHA-1, SHA-256 hashing
+- `CryptDeriveKey` / `CryptGenKey` / `CryptImportKey` -- key management
+- `CryptDecrypt` / `CryptEncrypt` -- RC4 stream cipher, AES-CBC/ECB block cipher
+- `CryptSetKeyParam` -- IV and cipher mode configuration
+
+### BCrypt (BCRYPT.DLL)
+
+Modern CNG API support:
+- `BCryptOpenAlgorithmProvider` -- AES, RC4, SHA-256, etc.
+- `BCryptGenerateSymmetricKey` -- key import/generation
+- `BCryptDecrypt` / `BCryptEncrypt` -- block/stream cipher operations
+
+This enables the emulator to observe malware that decrypts its payload using Windows crypto APIs
+before executing it.
+
+---
+
+## Memory Tracking and Content Extraction
+
+### Dirty Page Tracking
+
+A memory write hook records every written page address (page-aligned) during emulation. This
+identifies which memory regions were modified by the emulated code.
+
+### Self-Modifying Code Detection
+
+PE section address ranges are registered as "code regions." When a write targets any of these
+ranges, the translation block cache is invalidated at the next batch boundary, ensuring
+self-modified code executes correctly.
+
+### Unpacked Content Extraction
+
+After emulation completes, modified memory is collected:
+1. **PE sections**: All sections are read back; sections with >16 non-zero bytes are included
+2. **Dirty pages outside PE**: Pages not in PE sections, stack, TEB, or trampoline regions
+   are coalesced into contiguous regions (capped at 1MB per region)
+3. **Embedded PE scan**: Extracted data is scanned for `MZ` + `PE\0\0` signatures to find
+   unpacked PE payloads
+
+### Dropped File Collection
+
+Files created during emulation are collected from two sources:
+1. **VFS write tracking**: Files added via `CreateFileW` / `WriteFile` during emulation
+2. **Object manager**: Writable file handles with non-empty data
+
+All extracted content is fed back through the full scan pipeline at Stage 6 (Unpacked Content).
+
+---
+
+## APC Draining
+
+When `NtQueueApcThread` is called during emulation, APC routines are queued. When the main
+emulation loop reaches the stop sentinel or instruction budget, any pending APCs are drained
+(each queued routine is called with its arguments) before termination. This handles malware
+that uses APC injection to execute unpacking code.
 
 ---
 
@@ -461,13 +590,19 @@ VFS-dropped files are extracted after emulation and fed back through the scan pi
 | FPU export functions | 67 |
 | SSE export functions | 1 (SSE_convert) |
 | Emulated WinAPI handlers | 198 |
-| Virtual DLLs (VDLLs) | 973 |
-| Max instructions per run | 500,000 |
+| Virtual DLLs (VDLLs) | 973 (750 x86 + 195 x64 + 18 ARM + 10 MSIL) |
+| Max instructions per run | 5,000,000 (configurable via DBVAR) |
+| Instruction batch size | ~1,000 |
+| Fopclog max entries | 8,192 |
+| Max SEH dispatches | 64 |
+| TLS callback budget | 50,000 per callback |
+| DllMain budget | 10,000 per VDLL |
 | FOP behavioral rules | 4,601 |
 | TUNNEL signature variants | 4 (x86, x64, ARM, ARM64) |
 | THREAD signature variants | 4 (x86, x64, ARM, ARM64) |
 | PE analysis attributes | 302 (`pea_*`) |
 | Emulator RTTI classes | 3 (x86, base, ARM) |
+| Crypto support | CryptAPI (MD5/SHA/AES/RC4) + BCrypt |
 
 ---
 

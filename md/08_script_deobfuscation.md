@@ -660,17 +660,24 @@ Error handling strings:
 
 Based on analysis of the binary's code sections dedicated to each language:
 
-| Language   | Approx. Lines of Transforms | Transform Categories |
-|------------|---------------------------|---------------------|
-| PowerShell | 22,856                    | 15+ categories |
-| JScript    | 20,671                    | 12+ categories |
-| VBScript   | 17,869                    | 10+ categories |
-| Batch      | 13,908                    | 8+ categories |
-| **Total**  | **~75,304**               | **~45 categories** |
+| Language   | Approx. Lines | Transforms | Transform Categories |
+|------------|-------------|------------|---------------------|
+| PowerShell | 22,856      | 394        | 15+ categories |
+| JScript    | 20,671      | 359        | 12+ categories |
+| VBScript   | 17,869      | 340        | 10+ categories |
+| Batch      | 13,908      | 265        | 8+ categories |
+| **Total**  | **~75,304** | **1,358**  | **~45 categories** |
 
 Combined across all languages, approximately **1,358 individual deobfuscation
 transforms** are implemented, making NScript one of the most comprehensive
 script deobfuscation engines in any antivirus product.
+
+### Coverage Estimates (PowerShell)
+
+Based on analysis of obfuscation tool coverage:
+- **~85-90%** of commodity malware obfuscation (concatenation, base64, format strings)
+- **~60-70%** of Invoke-Obfuscation basic layers (token, string, encoding)
+- **~20-30%** of Invoke-Obfuscation advanced layers (AST manipulation, deep nesting)
 
 ---
 
@@ -795,6 +802,46 @@ engine uses several strategies to manage performance:
 
 ---
 
+## Dynamic Deobfuscation Engines
+
+In addition to static transforms, NScript supports **dynamic deobfuscation** using
+external interpreters:
+
+### PowerShell Dynamic Engine
+
+When available, `pwsh` (PowerShell Core) is invoked with a 30-second timeout to
+execute scripts in a sandboxed context and capture the output. This resolves
+obfuscation that can only be unwound by actual PowerShell execution.
+
+### JScript/Node Dynamic Engine
+
+`node` (Node.js) is invoked with a 30-second timeout for JScript content,
+enabling execution-based deobfuscation of complex JavaScript patterns.
+
+Dynamic deobfuscation is preferred when available (`Auto` engine resolution) but
+falls back to `Static` transforms when interpreters are not present.
+
+---
+
+## Cryptographic Support
+
+NScript includes built-in cryptographic primitives for deobfuscating encrypted payloads:
+
+- **AES-128-CBC** and **AES-256-CBC** with PKCS7 padding
+- Used to decrypt PowerShell `SecureString` and `AES`-encrypted payloads
+- Enables deobfuscation of malware that embeds AES-encrypted strings or payloads
+
+---
+
+## Size Gates
+
+NScript is gated by file size to manage performance:
+- **Maximum input size**: 1MB (scripts larger than this skip deobfuscation)
+- **MpMaxScriptParseLength**: Configurable maximum parse length (DBVAR)
+- **JS emulation bounds**: `MpJSEmuMinScriptSize` / `MpJSEmuMaxScriptSize`
+
+---
+
 ## Summary
 
 NScript is the script deobfuscation backbone of the Defender scan pipeline,
@@ -804,10 +851,12 @@ approach ensures that even deeply nested obfuscation is systematically
 unwound, with each intermediate form scanned for threats.
 
 Key takeaways:
-- **4 languages:** PowerShell, VBScript, JScript, Batch (plus Python support)
-- **~1,358 transforms** across all language engines
+- **4 languages:** PowerShell (394), VBScript (340), JScript (359), Batch (265) — plus Python support
+- **1,358 total transforms** across all language engines
 - **32-pass maximum** fixed-point iteration
 - **Each intermediate layer** scanned through static engines + Lua + BRUTE
-- **20+ JS feature attributes** for ML-based classification
+- **Dynamic deobfuscation** via pwsh and node interpreters (30-second timeouts)
+- **20+ JS feature attributes** for ML-based classification (feeds SIG_TREE)
+- **AES-128/256-CBC** cryptographic support for encrypted payload deobfuscation
 - **AMSI integration** for runtime script content
 - **VFO queuing** of normalized output for complete re-scan

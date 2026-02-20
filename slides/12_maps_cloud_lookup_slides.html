@@ -80,7 +80,7 @@ code,.code{font-family:var(--mono);font-size:0.9em}
     <div class="stat-card" style="opacity:1;transform:none;min-width:160px"><span class="num glow-cyan" style="font-size:1rem">fastpath.wdcp</span><span class="label">Cloud Endpoint</span></div>
     <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-green">Bond</span><span class="label">Serialization</span></div>
     <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-purple">4</span><span class="label">FASTPATH Sig Types</span></div>
-    <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-orange" data-count="20">0</span><span class="label">Telemetry Fields</span></div>
+    <div class="stat-card" style="opacity:1;transform:none;min-width:120px"><span class="num glow-orange">72</span><span class="label">STREAM_ATTRIBUTEs</span></div>
   </div>
   <p class="mono mt-3" style="font-size:0.75rem;color:var(--fg3)">fastpath.wdcp.microsoft.com @ 0x10A09EC0 &mdash; BondSerializer @ 0x109C80E0</p>
 </div>
@@ -250,22 +250,32 @@ code,.code{font-family:var(--mono);font-size:0.9em}
   <p class="desc mb-2">MAPS behavior controlled by SpyNet reporting level and registry settings</p>
   <div class="split">
     <div>
-      <h3 style="color:var(--green)">Reporting Levels</h3>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
-        <div class="engine-bar" style="border-left-color:var(--red);transition-delay:0.1s">
+      <h3 style="color:var(--green)">Cloud Block Levels</h3>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+        <div class="engine-bar" style="border-left-color:var(--fg3);transition-delay:0.08s;padding:7px 12px">
           <span class="idx">0</span>
-          <span class="name" style="color:var(--red)">MAPS Off</span>
-          <span class="detail">"MAPSOff" @ 0x10A08980 &mdash; No cloud queries</span>
+          <span class="name" style="color:var(--fg3);font-size:0.8rem">Off</span>
+          <span class="detail">No cloud queries (MAPSOff @ 0x10A08980)</span>
         </div>
-        <div class="engine-bar" style="border-left-color:var(--yellow);transition-delay:0.15s">
+        <div class="engine-bar" style="border-left-color:var(--yellow);transition-delay:0.11s;padding:7px 12px">
           <span class="idx">1</span>
-          <span class="name" style="color:var(--yellow)">Basic</span>
+          <span class="name" style="color:var(--yellow);font-size:0.8rem">Moderate</span>
           <span class="detail">Minimal metadata for lowfi lookups</span>
         </div>
-        <div class="engine-bar" style="border-left-color:var(--green);transition-delay:0.2s">
+        <div class="engine-bar" style="border-left-color:var(--orange);transition-delay:0.14s;padding:7px 12px">
           <span class="idx">2</span>
-          <span class="name" style="color:var(--green)">Advanced</span>
+          <span class="name" style="color:var(--orange);font-size:0.8rem">High</span>
           <span class="detail">Full metadata + file samples when requested</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--red);transition-delay:0.17s;padding:7px 12px">
+          <span class="idx">3</span>
+          <span class="name" style="color:var(--red);font-size:0.8rem">High+</span>
+          <span class="detail">Enhanced heuristics + automatic sample submission</span>
+        </div>
+        <div class="engine-bar" style="border-left-color:var(--red);transition-delay:0.2s;padding:7px 12px">
+          <span class="idx">4</span>
+          <span class="name" style="color:var(--red);font-size:0.8rem">Zero Tolerance</span>
+          <span class="detail">Block all unknown files pending cloud verdict</span>
         </div>
       </div>
       <div class="code-block mt-2" style="font-size:0.7rem"><span class="cmt">// Registry paths</span>
@@ -394,22 +404,30 @@ code,.code{font-family:var(--mono);font-size:0.9em}
 <div class="slide" data-slide="9">
 <div class="slide-inner center-col" style="justify-content:center;gap:24px">
   <h2 class="glow-cyan mb-1">Key Takeaways</h2>
-  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;width:100%;max-width:1200px">
-    <div class="stat-card" style="transition-delay:0.1s;text-align:left;padding:18px;border-left:3px solid var(--cyan)">
-      <h3 style="color:var(--cyan);font-size:0.9rem">Cloud-Delivered Protection</h3>
-      <p style="font-size:0.8rem;color:var(--fg2);margin-top:6px">Lowfi detections trigger cloud queries. ML models, reputation data, and prevalence analysis enhance local decisions.</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:100%;max-width:1200px">
+    <div class="stat-card" style="transition-delay:0.1s;text-align:left;padding:16px;border-left:3px solid var(--cyan)">
+      <h3 style="color:var(--cyan);font-size:0.85rem">5 Cloud Block Levels</h3>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:4px">Off / Moderate / High / High+ / Zero Tolerance. Controls detection aggressiveness.</p>
     </div>
-    <div class="stat-card" style="transition-delay:0.15s;text-align:left;padding:18px;border-left:3px solid var(--green)">
-      <h3 style="color:var(--green);font-size:0.9rem">Bond Protocol</h3>
-      <p style="font-size:0.8rem;color:var(--fg2);margin-top:6px">Microsoft Bond CompactBinaryV1 serialization. 13+ RTTI classes for structured report/response data.</p>
+    <div class="stat-card" style="transition-delay:0.13s;text-align:left;padding:16px;border-left:3px solid var(--green)">
+      <h3 style="color:var(--green);font-size:0.85rem">7 Report Types</h3>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:4px">Async Lowfi, Sync Lowfi, Telemetry, Sample, Heartbeat, URL Reputation, WDO.</p>
     </div>
-    <div class="stat-card" style="transition-delay:0.2s;text-align:left;padding:18px;border-left:3px solid var(--purple)">
-      <h3 style="color:var(--purple);font-size:0.9rem">FASTPATH Signatures</h3>
-      <p style="font-size:0.8rem;color:var(--fg2);margin-top:6px">4 types: SDN (detection name), SDN_EX (extended), TDN (threat identity), DATA (binary sigs). Real-time delivery.</p>
+    <div class="stat-card" style="transition-delay:0.16s;text-align:left;padding:16px;border-left:3px solid var(--purple)">
+      <h3 style="color:var(--purple);font-size:0.85rem">Certificate Pinning</h3>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:4px">SSLOptions 0-3: SHA-1 root thumbs + SHA-256 SPKI public key hashes. CRL via AME root CAs.</p>
     </div>
-    <div class="stat-card" style="transition-delay:0.25s;text-align:left;padding:18px;border-left:3px solid var(--orange)">
-      <h3 style="color:var(--orange);font-size:0.9rem">Graceful Degradation</h3>
-      <p style="font-size:0.8rem;color:var(--fg2);margin-top:6px">Network failures do not cause false positives. Cached responses enable offline cloud protection. 20+ latency metrics.</p>
+    <div class="stat-card" style="transition-delay:0.19s;text-align:left;padding:16px;border-left:3px solid var(--orange)">
+      <h3 style="color:var(--orange);font-size:0.85rem">4 FASTPATH Sig Types</h3>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:4px">SDN (name), SDN_EX (extended), TDN (threat identity), DATA (binary sigs). Real-time delivery.</p>
+    </div>
+    <div class="stat-card" style="transition-delay:0.22s;text-align:left;padding:16px;border-left:3px solid var(--cyan)">
+      <h3 style="color:var(--cyan);font-size:0.85rem">72 STREAM_ATTRIBUTEs</h3>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:4px">Including 8 AMSI-specific. URL, Threat ID, LOFI, MOTW ADS, Trust Level, Session/App IDs.</p>
+    </div>
+    <div class="stat-card" style="transition-delay:0.25s;text-align:left;padding:16px;border-left:3px solid var(--green)">
+      <h3 style="color:var(--green);font-size:0.85rem">Graceful Degradation</h3>
+      <p style="font-size:0.75rem;color:var(--fg2);margin-top:4px">Network failures do not cause false positives. Cached FASTPATH responses. 20+ latency metrics.</p>
     </div>
   </div>
   <p class="mono mt-3" style="font-size:0.75rem;color:var(--fg3)">All data from reverse engineering mpengine.dll v1.1.24120.x</p>

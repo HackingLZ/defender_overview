@@ -145,7 +145,7 @@ File/Buffer Input
 │  x86/x64 CPU emulator with 198 WinAPI handlers.                 │
 │  Maps PE sections, resolves imports via 973 VDLLs.               │
 │  Records FOP (opcode trace) and APICLOG (API behavior).          │
-│  500K instruction limit per execution.                           │
+│  5M instruction budget per execution (configurable).             │
 │  RTTI: ".?AVx86_IL_emulator@@" @ 0x10C748CC                     │
 │  String: "reemulate" @ 0x10981878                                │
 └────────┬─────────────────────────────────────────────────────────┘
@@ -250,25 +250,26 @@ File/Buffer Input
 | Metric | Value | Source |
 |--------|-------|--------|
 | Total exports | 90 | export table |
-| FPU emulation functions | 66 | `FPU_*` exports |
+| FPU emulation functions | 67 | `FPU_*` exports |
 | Binary size | 14.3 MB | PE header |
 | Total threats defined | 358,756 | VDM TLV index |
 | PEHSTR rules | 117,563 | VDM index |
 | KCRCE entries | 691,145 | VDM index |
 | MD5 static hashes | 2,433,812 | VDM index |
 | Lua detection scripts | 59,415 | VDM LUASTANDALONE |
-| Virtual DLLs | 973 | VDM VDLL entries |
+| Virtual DLLs | 973 | VDM VDLL entries (750 x86, 195 x64, 18 ARM, 10 MSIL) |
 | Virtual files | 144 | VDM VFILE entries |
 | DBVARs (config entries) | 547 | VDM DBVAR entries |
 | FOP behavioral rules | 4,601 | VDM FOP entries |
-| SIG_TREE ML trees | 33,428 | VDM SIG_TREE + EXT + BM |
+| SIG_TREE ML trees | 33,428 | VDM SIG_TREE + EXT + BM (408,708 nodes) |
 | Threat name prefixes | 504 | VDM prefix table |
 | TLV entries | 9.3M | Across 4 VDM files |
 | Signature types | 158+ | TLV type constants |
 | WinAPI handlers | 198 | Emulator dispatch |
-| Container formats | 25+ | Extraction framework |
+| Emulation instruction budget | 5M | Default, configurable via DBVAR |
+| Container formats | 70+ | Extraction framework (25+ primary) |
 | Script languages | 4 | PS, VBS, JS, Batch |
-| Deobfuscation transforms | 1,358 | Across 4 languages |
+| Deobfuscation transforms | 1,358 | PS:394, VBS:340, JS:359, Batch:265 |
 
 ---
 
