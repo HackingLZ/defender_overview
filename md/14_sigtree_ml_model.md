@@ -25,12 +25,12 @@ in the VDM (Virus Definition Module) signature databases. This is a critical det
 
 ### Detection Output
 
-SIG_TREE evaluations produce detections with these suffixes (see Stage 13):
+SIG_TREE evaluations produce detections with these suffixes (see [Stage 13 — full suffix table](13_verdict_resolution.md#detection-suffixes)):
 
-| Suffix | Full Name | Example |
-|--------|-----------|---------|
-| `!MTB` | Machine Learning / Tree-Based model | `Trojan:Win32/Emotet.RPX!MTB` |
-| `!ml` | Machine Learning detection | `Trojan:Win32/AgentTesla!ml` |
+| Suffix | Source | Example |
+|--------|--------|---------|
+| `!MTB` | SIG_TREE 0x40 — PE boolean attribute decision trees | `Trojan:Win32/Emotet.RPX!MTB` |
+| `!ml` | SIG_TREE_EXT 0x41 + SIG_TREE_BM 0xB3 — string-matching trees | `Trojan:Win32/AgentTesla!ml` |
 
 ---
 

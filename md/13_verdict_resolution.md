@@ -278,15 +278,16 @@ Components:
 
 ### Detection Suffixes
 
-| Suffix | Meaning |
-|--------|---------|
-| `!MTB` | Machine Learning / Tree-Based model — produced by SigTree decision tree ensemble. See [SigTree ML (SS14)](14_sigtree_ml_classification.md) |
-| `!ml` | Machine Learning detection — produced by SigTree classification. See [SS14](14_sigtree_ml_classification.md) |
-| `!dha` | Dynamic Heuristic Analysis |
-| `!pz` | Pattern-based heuristic |
-| `!rfn` | Real-time File Notification |
-| `!cl` | Cloud-delivered detection |
-| (none) | Traditional signature match |
+| Suffix | Source | Local/Cloud |
+|--------|--------|-------------|
+| `!MTB` | SIG_TREE 0x40 — PE boolean attribute decision trees. See [SigTree ML (SS14)](14_sigtree_ml_classification.md) | Local |
+| `!ml` | SIG_TREE_EXT 0x41 + SIG_TREE_BM 0xB3 — string-matching decision trees. See [SS14](14_sigtree_ml_classification.md) | Local |
+| `!atmn` | Original threat name suffix from VDM (not engine-generated) | Local (VDM) |
+| `!dha` | Dynamic Heuristic Analysis (PE emulation + Lua). See [Stage 5](05_pe_emulation.md), [Stage 10](10_lua_scripts.md) | Local |
+| `!pz` | Pattern-based heuristic | Local |
+| `!cl` | Cloud-delivered ML classification via MAPS. See [Stage 12](12_maps_cloud_lookup.md) | Cloud (MAPS) |
+| `!rfn` | Real-time File Notification (reputation) via MAPS. See [Stage 12](12_maps_cloud_lookup.md) | Cloud (MAPS) |
+| (none) | Traditional signature match (exact byte-pattern) | Local |
 
 ---
 

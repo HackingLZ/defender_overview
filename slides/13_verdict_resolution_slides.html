@@ -243,17 +243,31 @@ code,.code{font-family:var(--mono);font-size:0.9em}
     </div>
     <div>
       <h3 style="color:var(--cyan)">Detection Suffixes</h3>
-      <div style="display:grid;grid-template-columns:1fr 2fr;gap:6px;font-size:0.78rem;margin-top:12px">
-        <div class="stat-card" style="transition-delay:0.3s;padding:10px"><span class="num" style="font-size:0.8rem;color:var(--cyan)">!MTB</span><span class="label">ML Tree-Based</span></div>
-        <div class="stat-card" style="transition-delay:0.3s;padding:10px;text-align:left"><span class="label">Produced by SigTree decision tree ensemble. See SS14</span></div>
-        <div class="stat-card" style="transition-delay:0.35s;padding:10px"><span class="num" style="font-size:0.8rem;color:var(--cyan)">!ml</span><span class="label">Machine Learning</span></div>
-        <div class="stat-card" style="transition-delay:0.35s;padding:10px;text-align:left"><span class="label">Produced by SigTree ML classification. See SS14</span></div>
-        <div class="stat-card" style="transition-delay:0.4s;padding:10px"><span class="num" style="font-size:0.8rem;color:var(--green)">!dha</span><span class="label">Dynamic Heuristic</span></div>
-        <div class="stat-card" style="transition-delay:0.4s;padding:10px;text-align:left"><span class="label">Behavioral analysis result</span></div>
-        <div class="stat-card" style="transition-delay:0.45s;padding:10px"><span class="num" style="font-size:0.8rem;color:var(--purple)">!rfn</span><span class="label">Real-time File</span></div>
-        <div class="stat-card" style="transition-delay:0.45s;padding:10px;text-align:left"><span class="label">Real-time file notification</span></div>
-        <div class="stat-card" style="transition-delay:0.5s;padding:10px"><span class="num" style="font-size:0.8rem;color:var(--orange)">!cl</span><span class="label">Cloud</span></div>
-        <div class="stat-card" style="transition-delay:0.5s;padding:10px;text-align:left"><span class="label">Cloud-delivered FASTPATH</span></div>
+      <div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px;font-size:0.72rem;margin-top:12px">
+        <div class="stat-card" style="transition-delay:0.3s;padding:8px"><span class="num" style="font-size:0.8rem;color:var(--cyan)">!MTB</span></div>
+        <div class="stat-card" style="transition-delay:0.3s;padding:8px;text-align:left"><span class="label">SIG_TREE 0x40 — PE boolean attribute decision trees</span></div>
+        <div class="stat-card" style="transition-delay:0.3s;padding:8px"><span class="label" style="color:var(--green)">Local</span></div>
+        <div class="stat-card" style="transition-delay:0.35s;padding:8px"><span class="num" style="font-size:0.8rem;color:var(--cyan)">!ml</span></div>
+        <div class="stat-card" style="transition-delay:0.35s;padding:8px;text-align:left"><span class="label">SIG_TREE_EXT 0x41 + SIG_TREE_BM 0xB3 — string-matching trees</span></div>
+        <div class="stat-card" style="transition-delay:0.35s;padding:8px"><span class="label" style="color:var(--green)">Local</span></div>
+        <div class="stat-card" style="transition-delay:0.38s;padding:8px"><span class="num" style="font-size:0.8rem;color:var(--yellow)">!atmn</span></div>
+        <div class="stat-card" style="transition-delay:0.38s;padding:8px;text-align:left"><span class="label">Original threat name suffix from VDM (not engine-generated)</span></div>
+        <div class="stat-card" style="transition-delay:0.38s;padding:8px"><span class="label" style="color:var(--green)">Local (VDM)</span></div>
+        <div class="stat-card" style="transition-delay:0.4s;padding:8px"><span class="num" style="font-size:0.8rem;color:var(--green)">!dha</span></div>
+        <div class="stat-card" style="transition-delay:0.4s;padding:8px;text-align:left"><span class="label">Dynamic Heuristic Analysis (PE emulation + Lua)</span></div>
+        <div class="stat-card" style="transition-delay:0.4s;padding:8px"><span class="label" style="color:var(--green)">Local</span></div>
+        <div class="stat-card" style="transition-delay:0.43s;padding:8px"><span class="num" style="font-size:0.8rem;color:var(--green)">!pz</span></div>
+        <div class="stat-card" style="transition-delay:0.43s;padding:8px;text-align:left"><span class="label">Pattern-based heuristic</span></div>
+        <div class="stat-card" style="transition-delay:0.43s;padding:8px"><span class="label" style="color:var(--green)">Local</span></div>
+        <div class="stat-card" style="transition-delay:0.46s;padding:8px"><span class="num" style="font-size:0.8rem;color:var(--orange)">!cl</span></div>
+        <div class="stat-card" style="transition-delay:0.46s;padding:8px;text-align:left"><span class="label">Cloud-delivered ML classification via MAPS</span></div>
+        <div class="stat-card" style="transition-delay:0.46s;padding:8px"><span class="label" style="color:var(--purple)">Cloud (MAPS)</span></div>
+        <div class="stat-card" style="transition-delay:0.49s;padding:8px"><span class="num" style="font-size:0.8rem;color:var(--purple)">!rfn</span></div>
+        <div class="stat-card" style="transition-delay:0.49s;padding:8px;text-align:left"><span class="label">Real-time File Notification (reputation) via MAPS</span></div>
+        <div class="stat-card" style="transition-delay:0.49s;padding:8px"><span class="label" style="color:var(--purple)">Cloud (MAPS)</span></div>
+        <div class="stat-card" style="transition-delay:0.52s;padding:8px"><span class="num" style="font-size:0.8rem;color:var(--dim)">(none)</span></div>
+        <div class="stat-card" style="transition-delay:0.52s;padding:8px;text-align:left"><span class="label">Traditional signature match (exact byte-pattern)</span></div>
+        <div class="stat-card" style="transition-delay:0.52s;padding:8px"><span class="label" style="color:var(--green)">Local</span></div>
       </div>
     </div>
   </div>
